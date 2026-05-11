@@ -1,0 +1,27 @@
+[project]
+name = "mint"
+version = "0.1.0"
+description = "Spotify to Apple Music with MusicBrainz-correct ID3 tags"
+requires-python = ">=3.12"
+dependencies = [
+    "mutagen>=1.47",
+    "musicbrainzngs>=0.7.1",
+    "requests>=2.31",
+    "pyfiglet>=1.0",
+    "spotdl>=4.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+mint = "mint.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mint*"]
+exclude = ["tests*"]
