@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Iterator
 
@@ -34,3 +35,19 @@ def build_dupe_index(root: Path) -> set[tuple[str, str]]:
             continue
         index.add((normalize_for_dupe(artist), normalize_for_dupe(t.tit2)))
     return index
+
+
+def build_genre_index(root: Path) -> dict[str, str]:
+    """Return {normalized_artist: dominant_genre} from the existing library.
+
+    For each artist, the dominant genre is the TCON value used by the most
+    tracks. Tracks without TCON are ignored.
+    """
+    counts: dict[str, Counter] = defaultdict(Counter)
+    for path in walk_library(root):
+        t = read_track(path)
+        artist = t.tpe2 or t.tpe1
+        if not artist or not t.tcon:
+            continue
+        counts[normalize_for_dupe(artist)][t.tcon] += 1
+    return {a: c.most_common(1)[0][0] for a, c in counts.items()}
