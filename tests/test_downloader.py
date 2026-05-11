@@ -14,7 +14,9 @@ def test_download_url_runs_spotdl_in_output_dir(tmp_path):
         paths = download_url("https://open.spotify.com/album/abc", staging)
 
     args = run.call_args[0][0]
-    assert args[0] == "spotdl"
+    assert args[0].endswith("python") or args[0].endswith("python3") or "python" in args[0]
+    assert args[1] == "-m"
+    assert args[2] == "spotdl"
     assert "https://open.spotify.com/album/abc" in args
     assert sorted(p.name for p in paths) == ["Track A.mp3", "Track B.mp3"]
 
