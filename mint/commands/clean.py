@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,9 +26,21 @@ def _truncate(s: str, n: int) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
-def _progress(idx: int, total: int, label: str, status: str) -> None:
+def _format_eta(seconds: float) -> str:
+    if seconds < 1:
+        return "<1s"
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m {seconds % 60:02d}s"
+    return f"{seconds // 3600}h {(seconds % 3600) // 60:02d}m"
+
+
+def _progress(idx: int, total: int, label: str, status: str, eta: str = "") -> None:
     width = len(str(total))
-    line = f"[{idx:>{width}}/{total}] {_truncate(label, 50):<50} {status}"
+    suffix = f"  ETA {eta}" if eta else ""
+    line = f"[{idx:>{width}}/{total}] {_truncate(label, 50):<50} {status}{suffix}"
     sys.stdout.write("\r\x1b[2K" + line)
     sys.stdout.flush()
 
@@ -67,15 +80,24 @@ def run_clean(
     matched = 0
     no_match = 0
     no_metadata = 0
+    audit_start = time.monotonic()
 
     for idx, ((artist, album), album_tracks) in enumerate(albums, start=1):
         label = f"{artist or '?'} — {album or '?'}"
+
+        completed = idx - 1
+        if completed > 0:
+            avg = (time.monotonic() - audit_start) / completed
+            eta = _format_eta(avg * (total - completed))
+        else:
+            eta = ""
+
         if not artist or not album:
             no_metadata += 1
             _progress_done(idx, total, label, "skipped (missing artist/album)")
             continue
 
-        _progress(idx, total, label, "looking up...")
+        _progress(idx, total, label, "looking up...", eta=eta)
         mb_release = client.lookup_release(artist, album)
         if mb_release is None:
             no_match += 1
@@ -106,9 +128,10 @@ def run_clean(
         status = "clean" if track_issues_count == 0 else f"{track_issues_count} issue(s)"
         _progress_done(idx, total, label, status)
 
+    elapsed = time.monotonic() - audit_start
     print()
     print(f"Audit summary: {matched} matched, {no_match} no MB match, "
-          f"{no_metadata} missing tags")
+          f"{no_metadata} missing tags  (took {_format_eta(elapsed)})")
     print()
     print(format_report(issues, scanned=len(tracks)))
     if not clean_plan:
