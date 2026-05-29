@@ -7,6 +7,7 @@ from mint import __version__
 from mint.banner import render_banner
 from mint.commands.add import run_add
 from mint.commands.clean import run_clean
+from mint.commands.dup import run_dup
 from mint.commands.update import run_update
 from mint.config import CACHE_DB, LIBRARY_ROOT, MB_USER_AGENT, STAGING_DIR
 
@@ -14,6 +15,7 @@ from mint.config import CACHE_DB, LIBRARY_ROOT, MB_USER_AGENT, STAGING_DIR
 COMMANDS = [
     ("add <url>",  "download YouTube URL, tag, import into Apple Music"),
     ("clean",      "audit library, propose ID3 fixes, apply on approval"),
+    ("dup",        "list duplicate tracks in the library"),
     ("update",     "upgrade mint to the latest version from GitHub"),
     ("version",    "print the installed version"),
     ("help",       "show this help"),
@@ -26,6 +28,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_p = sub.add_parser("add", add_help=False)
     add_p.add_argument("url")
     sub.add_parser("clean", add_help=False)
+    sub.add_parser("dup", add_help=False)
     sub.add_parser("update", add_help=False)
     sub.add_parser("version", add_help=False)
     sub.add_parser("help", add_help=False)
@@ -87,6 +90,10 @@ def main(argv: list[str] | None = None) -> int:
             cache_db=CACHE_DB,
             user_agent=MB_USER_AGENT,
         )
+        return 0
+
+    if args.command == "dup":
+        run_dup(library_root=LIBRARY_ROOT)
         return 0
 
     if args.command == "update":

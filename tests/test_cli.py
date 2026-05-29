@@ -49,6 +49,15 @@ def test_cli_clean_dispatches():
     r.assert_called_once()
 
 
+def test_cli_dup_dispatches():
+    with patch("mint.cli.run_dup") as r:
+        r.return_value.groups = 0
+        r.return_value.extra_files = 0
+        rc = main(["dup"])
+    assert rc == 0
+    r.assert_called_once()
+
+
 def test_cli_update_dispatches():
     with patch("mint.cli.run_update") as r:
         r.return_value.method = "pipx"
