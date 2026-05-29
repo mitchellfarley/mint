@@ -6,4 +6,3 @@ build/
 dist/
 .venv/
 ~/.cache/mint/
-mint/_version.py
