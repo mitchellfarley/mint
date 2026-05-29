@@ -58,7 +58,29 @@ def _build_mb_release(detail: dict, candidates: list[str]) -> MBRelease:
     )
 
 
-def _pick_release_from_recording(recording: dict) -> tuple[str, int, int] | None:
+_BAD_SECONDARY_TYPES = {
+    "mixtape/street", "compilation", "dj-mix", "demo", "bootleg",
+    "interview", "spokenword", "audiobook",
+}
+
+
+def _release_quality(release: dict) -> int:
+    """Lower is better. 0 = canonical album, higher = less canonical."""
+    rg = release.get("release-group", {}) or {}
+    primary = (rg.get("primary-type") or "").lower()
+    secondaries = {s.lower() for s in (rg.get("secondary-type-list") or [])}
+    if secondaries & _BAD_SECONDARY_TYPES:
+        return 100
+    if primary == "album":
+        return 0
+    if primary == "ep":
+        return 10
+    if primary == "single":
+        return 20
+    return 50
+
+
+def _pick_release_id_from_recording(recording: dict) -> str | None:
     rel_list = recording.get("release-list", [])
     if not rel_list:
         return None
@@ -66,24 +88,27 @@ def _pick_release_from_recording(recording: dict) -> tuple[str, int, int] | None
     pool = official or rel_list
 
     def _key(r: dict) -> tuple:
+        quality = _release_quality(r)
         date = r.get("date") or "9999"
         country = r.get("country") or ""
         country_priority = 0 if country in ("US", "XW", "") else 1
-        rg = r.get("release-group", {}) or {}
-        primary = (rg.get("primary-type") or "").lower()
-        type_priority = 0 if primary == "album" else (1 if primary == "ep" else 2)
-        return (type_priority, date, country_priority)
+        return (quality, date, country_priority)
 
     pool_sorted = sorted(pool, key=_key)
-    rec_id = recording.get("id")
     chosen = pool_sorted[0]
-    medium_list = chosen.get("medium-list", [])
-    for medium in medium_list:
+    if _release_quality(chosen) >= 100:
+        return None
+    return chosen["id"]
+
+
+def _find_position_in_detail(detail: dict, recording_id: str) -> tuple[int, int] | None:
+    rel = detail["release"]
+    for medium in rel.get("medium-list", []):
         disc = int(medium.get("position", 1))
         for trk in medium.get("track-list", []):
-            if trk.get("recording", {}).get("id") == rec_id:
-                return chosen["id"], disc, int(trk.get("position", 0))
-    return chosen["id"], 1, 1
+            if trk.get("recording", {}).get("id") == recording_id:
+                return disc, int(trk.get("position", 0))
+    return None
 
 
 class MBClient:
@@ -128,8 +153,7 @@ class MBClient:
         cached = self.cache.get(rec_key)
         if cached is not None:
             release_id = cached["release_id"]
-            disc = int(cached["disc"])
-            position = int(cached["position"])
+            recording_id = cached["recording_id"]
         else:
             self._throttle()
             results = musicbrainzngs.search_recordings(
@@ -140,23 +164,22 @@ class MBClient:
                 return None
             pick = None
             for rec in recordings:
-                got = _pick_release_from_recording(rec)
-                if got is not None:
-                    pick = got
+                rid = _pick_release_id_from_recording(rec)
+                if rid is not None:
+                    pick = (rid, rec.get("id"))
                     break
             if pick is None:
                 return None
-            release_id, disc, position = pick
+            release_id, recording_id = pick
             self.cache.set(rec_key, {
                 "release_id": release_id,
-                "disc": disc,
-                "position": position,
+                "recording_id": recording_id,
             })
 
         release_key = f"rid::{release_id}"
         cached_rel = self.cache.get(release_key)
         if cached_rel is not None:
-            mb_release = _build_mb_release(cached_rel["detail"], cached_rel["candidates"])
+            detail = cached_rel["detail"]
         else:
             self._throttle()
             detail = musicbrainzngs.get_release_by_id(
@@ -164,7 +187,12 @@ class MBClient:
                 includes=["recordings", "artist-credits"],
             )
             self.cache.set(release_key, {"detail": detail, "candidates": [release_id]})
-            mb_release = _build_mb_release(detail, [release_id])
+
+        pos = _find_position_in_detail(detail, recording_id)
+        if pos is None:
+            return None
+        disc, position = pos
+        mb_release = _build_mb_release(detail, [release_id])
         return mb_release, disc, position
 
     def fetch_cover(self, release_ids: Iterable[str]) -> bytes | None:
