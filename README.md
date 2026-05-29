@@ -64,7 +64,7 @@ Usage:
 
 Commands:
   add <url>   download YouTube URL, tag, import into Apple Music
-  fix         audit library, propose ID3 fixes, apply on approval
+  clean       audit library, propose ID3 fixes, apply on approval
   help        show this help
 ```
 
@@ -111,7 +111,7 @@ titles (e.g. `ColdplayVEVO` channel uploading `Yellow` with no
 separator) are reported as `unparseable title` and left in the
 staging directory.
 
-### `mint fix`
+### `mint clean`
 
 Audit the existing library, report tag issues, apply fixes after
 approval. Checks for:

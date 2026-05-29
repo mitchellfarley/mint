@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from mint.auditor import audit_track, propose_fixes
-from mint.fixer import apply_proposed
+from mint.cleaner import apply_proposed
 from mint.itunes import import_file, remove_album
 from mint.library import build_genre_index, normalize_for_dupe, walk_library
 from mint.mb_cache import MBCache
@@ -15,16 +15,16 @@ from mint.tagger import read_track
 
 
 @dataclass
-class FixResult:
+class CleanResult:
     applied: int = 0
     aborted: bool = False
 
 
-def run_fix(
+def run_clean(
     library_root: Path,
     cache_db: Path,
     user_agent: tuple[str, str, str],
-) -> FixResult:
+) -> CleanResult:
     cache = MBCache(cache_db)
     client = MBClient(cache=cache, user_agent=user_agent)
 
@@ -36,7 +36,7 @@ def run_fix(
     genre_index = build_genre_index(library_root)
 
     issues = []
-    fix_plan: list[tuple[Path, "ProposedTags", str]] = []
+    clean_plan: list[tuple[Path, "ProposedTags", str]] = []
     for (artist, album), album_tracks in by_album.items():
         if not artist or not album:
             continue
@@ -59,28 +59,28 @@ def run_fix(
                 issues.extend(t_issues)
                 proposed = propose_fixes(mb_release, disc=match[0],
                                           position=match[1], desired_genre=genre)
-                fix_plan.append((t.path, proposed, mb_release.title))
+                clean_plan.append((t.path, proposed, mb_release.title))
 
     print(format_report(issues, scanned=len(tracks)))
-    if not fix_plan:
-        return FixResult(applied=0)
+    if not clean_plan:
+        return CleanResult(applied=0)
 
-    prompt = f"Apply these {len(fix_plan)} changes? [y/N] "
+    prompt = f"Apply these {len(clean_plan)} changes? [y/N] "
     print(prompt, end="", flush=True)
     answer = input("").strip().lower()
     if answer != "y":
         print("Aborted, no changes written.")
-        return FixResult(applied=0, aborted=True)
+        return CleanResult(applied=0, aborted=True)
 
     affected_albums: set[str] = set()
-    for path, proposed, album_title in fix_plan:
+    for path, proposed, album_title in clean_plan:
         apply_proposed(path, proposed, cover_data=None)
         affected_albums.add(album_title)
 
     for album_title in affected_albums:
         remove_album(album_title)
-    for path, proposed, _ in fix_plan:
+    for path, proposed, _ in clean_plan:
         import_file(str(path))
 
-    print(f"Applied {len(fix_plan)} changes, re-imported {len(affected_albums)} albums.")
-    return FixResult(applied=len(fix_plan))
+    print(f"Applied {len(clean_plan)} changes, re-imported {len(affected_albums)} albums.")
+    return CleanResult(applied=len(clean_plan))

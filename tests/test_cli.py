@@ -6,7 +6,7 @@ from mint.cli import main, render_help
 def test_render_help_lists_all_commands():
     h = render_help()
     assert "add" in h
-    assert "fix" in h
+    assert "clean" in h
     assert "help" in h
     assert "Usage:" in h
     assert "Commands:" in h
@@ -17,7 +17,7 @@ def test_cli_no_args_prints_banner_and_help(capsys):
     out = capsys.readouterr().out
     assert "mint" in out.lower()
     assert "add" in out
-    assert "fix" in out
+    assert "clean" in out
     assert "Usage:" in out
     assert rc != 0
 
@@ -40,10 +40,10 @@ def test_cli_add_dispatches():
     r.assert_called_once()
 
 
-def test_cli_fix_dispatches():
-    with patch("mint.cli.run_fix") as r:
+def test_cli_clean_dispatches():
+    with patch("mint.cli.run_clean") as r:
         r.return_value.applied = 0
         r.return_value.aborted = False
-        rc = main(["fix"])
+        rc = main(["clean"])
     assert rc == 0
     r.assert_called_once()

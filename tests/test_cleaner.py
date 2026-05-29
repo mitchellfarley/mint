@@ -1,5 +1,5 @@
 from mint.auditor import ProposedTags
-from mint.fixer import apply_proposed
+from mint.cleaner import apply_proposed
 from mint.tagger import read_track
 
 

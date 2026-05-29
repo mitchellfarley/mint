@@ -2,7 +2,7 @@ import io
 from pathlib import Path
 from unittest.mock import patch
 
-from mint.commands.fix import run_fix
+from mint.commands.clean import run_clean
 from mint.models import MBRelease, MBTrack
 
 
@@ -20,7 +20,7 @@ def _fake_release():
     )
 
 
-def test_run_fix_aborts_when_user_declines(tmp_path, make_mp3, monkeypatch, capsys):
+def test_run_clean_aborts_when_user_declines(tmp_path, make_mp3, monkeypatch, capsys):
     root = tmp_path / "Library"
     (root / "Gorillaz" / "Demon Days").mkdir(parents=True)
     path = make_mp3(
@@ -32,10 +32,10 @@ def test_run_fix_aborts_when_user_declines(tmp_path, make_mp3, monkeypatch, caps
     )
     monkeypatch.setattr("builtins.input", lambda _: "n")
 
-    with patch("mint.commands.fix.MBClient") as mbc:
+    with patch("mint.commands.clean.MBClient") as mbc:
         mbc.return_value.lookup_release.return_value = _fake_release()
         mbc.return_value.fetch_cover.return_value = None
-        result = run_fix(
+        result = run_clean(
             library_root=root,
             cache_db=tmp_path / "mb.db",
             user_agent=("mint", "test", "x@y.z"),
@@ -46,7 +46,7 @@ def test_run_fix_aborts_when_user_declines(tmp_path, make_mp3, monkeypatch, caps
     assert "Apply" in out
 
 
-def test_run_fix_applies_when_user_approves(tmp_path, make_mp3, monkeypatch):
+def test_run_clean_applies_when_user_approves(tmp_path, make_mp3, monkeypatch):
     root = tmp_path / "Library"
     (root / "Gorillaz" / "Demon Days").mkdir(parents=True)
     path = make_mp3(
@@ -58,14 +58,14 @@ def test_run_fix_applies_when_user_approves(tmp_path, make_mp3, monkeypatch):
     )
     monkeypatch.setattr("builtins.input", lambda _: "y")
 
-    with patch("mint.commands.fix.MBClient") as mbc, \
-         patch("mint.commands.fix.remove_album") as rm, \
-         patch("mint.commands.fix.import_file") as imp:
+    with patch("mint.commands.clean.MBClient") as mbc, \
+         patch("mint.commands.clean.remove_album") as rm, \
+         patch("mint.commands.clean.import_file") as imp:
         mbc.return_value.lookup_release.return_value = _fake_release()
         mbc.return_value.fetch_cover.return_value = None
         rm.return_value = 0
         imp.return_value = 0
-        result = run_fix(
+        result = run_clean(
             library_root=root,
             cache_db=tmp_path / "mb.db",
             user_agent=("mint", "test", "x@y.z"),

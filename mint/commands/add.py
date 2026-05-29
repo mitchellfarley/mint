@@ -5,7 +5,7 @@ from pathlib import Path
 
 from mint.auditor import propose_fixes
 from mint.downloader import download_url
-from mint.fixer import apply_proposed
+from mint.cleaner import apply_proposed
 from mint.itunes import import_file
 from mint.library import build_dupe_index, build_genre_index, normalize_for_dupe
 from mint.mb_cache import MBCache

@@ -5,13 +5,13 @@ import sys
 
 from mint.banner import render_banner
 from mint.commands.add import run_add
-from mint.commands.fix import run_fix
+from mint.commands.clean import run_clean
 from mint.config import CACHE_DB, LIBRARY_ROOT, MB_USER_AGENT, STAGING_DIR
 
 
 COMMANDS = [
     ("add <url>", "download YouTube URL, tag, import into Apple Music"),
-    ("fix",       "audit library, propose ID3 fixes, apply on approval"),
+    ("clean",     "audit library, propose ID3 fixes, apply on approval"),
     ("help",      "show this help"),
 ]
 
@@ -21,7 +21,7 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command")
     add_p = sub.add_parser("add", add_help=False)
     add_p.add_argument("url")
-    sub.add_parser("fix", add_help=False)
+    sub.add_parser("clean", add_help=False)
     sub.add_parser("help", add_help=False)
     return p
 
@@ -34,7 +34,7 @@ def render_help() -> str:
     lines.append("")
     lines.append("Examples:")
     lines.append("  mint add https://www.youtube.com/watch?v=VIDEO_ID")
-    lines.append("  mint fix")
+    lines.append("  mint clean")
     return "\n".join(lines)
 
 
@@ -67,8 +67,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"    - {t}")
         return 0
 
-    if args.command == "fix":
-        run_fix(
+    if args.command == "clean":
+        run_clean(
             library_root=LIBRARY_ROOT,
             cache_db=CACHE_DB,
             user_agent=MB_USER_AGENT,
