@@ -12,6 +12,7 @@ from mint.itunes import import_file, remove_album
 from mint.library import build_genre_index, normalize_for_dupe, walk_library
 from mint.mb_cache import MBCache
 from mint.mb_client import MBClient
+from mint.progress import format_eta, progress, progress_done
 from mint.reporter import format_report
 from mint.tagger import read_track
 
@@ -20,35 +21,6 @@ from mint.tagger import read_track
 class CleanResult:
     applied: int = 0
     aborted: bool = False
-
-
-def _truncate(s: str, n: int) -> str:
-    return s if len(s) <= n else s[: n - 1] + "…"
-
-
-def _format_eta(seconds: float) -> str:
-    if seconds < 1:
-        return "<1s"
-    seconds = int(seconds)
-    if seconds < 60:
-        return f"{seconds}s"
-    if seconds < 3600:
-        return f"{seconds // 60}m {seconds % 60:02d}s"
-    return f"{seconds // 3600}h {(seconds % 3600) // 60:02d}m"
-
-
-def _progress(idx: int, total: int, label: str, status: str, eta: str = "") -> None:
-    width = len(str(total))
-    suffix = f"  ETA {eta}" if eta else ""
-    line = f"[{idx:>{width}}/{total}] {_truncate(label, 50):<50} {status}{suffix}"
-    sys.stdout.write("\r\x1b[2K" + line)
-    sys.stdout.flush()
-
-
-def _progress_done(idx: int, total: int, label: str, status: str) -> None:
-    _progress(idx, total, label, status)
-    sys.stdout.write("\n")
-    sys.stdout.flush()
 
 
 def run_clean(
@@ -88,20 +60,20 @@ def run_clean(
         completed = idx - 1
         if completed > 0:
             avg = (time.monotonic() - audit_start) / completed
-            eta = _format_eta(avg * (total - completed))
+            eta = format_eta(avg * (total - completed))
         else:
             eta = ""
 
         if not artist or not album:
             no_metadata += 1
-            _progress_done(idx, total, label, "skipped (missing artist/album)")
+            progress_done(idx, total, label, "skipped (missing artist/album)")
             continue
 
-        _progress(idx, total, label, "looking up...", eta=eta)
+        progress(idx, total, label, "looking up...", eta=eta)
         mb_release = client.lookup_release(artist, album)
         if mb_release is None:
             no_match += 1
-            _progress_done(idx, total, label, "no MB match")
+            progress_done(idx, total, label, "no MB match")
             continue
 
         track_issues_count = 0
@@ -126,12 +98,12 @@ def run_clean(
 
         matched += 1
         status = "clean" if track_issues_count == 0 else f"{track_issues_count} issue(s)"
-        _progress_done(idx, total, label, status)
+        progress_done(idx, total, label, status)
 
     elapsed = time.monotonic() - audit_start
     print()
     print(f"Audit summary: {matched} matched, {no_match} no MB match, "
-          f"{no_metadata} missing tags  (took {_format_eta(elapsed)})")
+          f"{no_metadata} missing tags  (took {format_eta(elapsed)})")
     print()
     print(format_report(issues, scanned=len(tracks)))
     if not clean_plan:
@@ -147,7 +119,7 @@ def run_clean(
     affected_albums: set[str] = set()
     plan_total = len(clean_plan)
     for idx, (path, proposed, album_title) in enumerate(clean_plan, start=1):
-        _progress(idx, plan_total, proposed.tit2, "writing tags")
+        progress(idx, plan_total, proposed.tit2, "writing tags")
         apply_proposed(path, proposed, cover_data=None)
         affected_albums.add(album_title)
     sys.stdout.write("\n")
@@ -157,7 +129,7 @@ def run_clean(
         remove_album(album_title)
     import_total = len(clean_plan)
     for idx, (path, proposed, _) in enumerate(clean_plan, start=1):
-        _progress(idx, import_total, proposed.tit2, "importing")
+        progress(idx, import_total, proposed.tit2, "importing")
         import_file(str(path))
     sys.stdout.write("\n")
 
