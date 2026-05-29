@@ -5,8 +5,18 @@ from pyfiglet import Figlet
 from mint import __version__
 
 
+_LEAF = (
+    "⠀⠀⠀⠀⠀⠀⠀⠀⣀⣠⣤⣤⣄⣀⣀⡀⠀⠀⠀\n"
+    "⠀⠀⠀⠀⠀⢀⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⠶\n"
+    "⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠃⠀\n"
+    "⠀⠀⠀⢀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀\n"
+    "⢀⣠⠞⠋⠉⠛⠻⠿⣿⣿⣿⠿⠟⠋⠀⠀⠀⠀⠀\n"
+    "⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+)
+
+
 def render_banner() -> str:
     fig = Figlet(font="standard")
     art = fig.renderText("mint").rstrip("\n")
     tagline = f"mint v{__version__} — youtube → apple music"
-    return f"{art}\n\n{tagline}"
+    return f"{art}\n\n{tagline}\n\n{_LEAF}"
