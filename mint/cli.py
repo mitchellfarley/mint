@@ -3,20 +3,20 @@ from __future__ import annotations
 import argparse
 import sys
 
+from mint import __version__
 from mint.banner import render_banner
 from mint.commands.add import run_add
 from mint.commands.clean import run_clean
-from mint.commands.shell_init import run_shell_init
 from mint.commands.update import run_update
 from mint.config import CACHE_DB, LIBRARY_ROOT, MB_USER_AGENT, STAGING_DIR
 
 
 COMMANDS = [
-    ("add <url>",   "download YouTube URL, tag, import into Apple Music"),
-    ("clean",       "audit library, propose ID3 fixes, apply on approval"),
-    ("update",      "upgrade mint to the latest version from GitHub"),
-    ("shell-init",  "install zsh wrapper so bare YouTube URLs work unquoted"),
-    ("help",        "show this help"),
+    ("add <url>",  "download YouTube URL, tag, import into Apple Music"),
+    ("clean",      "audit library, propose ID3 fixes, apply on approval"),
+    ("update",     "upgrade mint to the latest version from GitHub"),
+    ("version",    "print the installed version"),
+    ("help",       "show this help"),
 ]
 
 
@@ -27,9 +27,9 @@ def _build_parser() -> argparse.ArgumentParser:
     add_p.add_argument("url")
     sub.add_parser("clean", add_help=False)
     sub.add_parser("update", add_help=False)
-    shell_p = sub.add_parser("shell-init", add_help=False)
-    shell_p.add_argument("--install", action="store_true")
+    sub.add_parser("version", add_help=False)
     sub.add_parser("help", add_help=False)
+    p.add_argument("--version", "-v", action="store_true")
     return p
 
 
@@ -46,14 +46,21 @@ def render_help() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    print(render_banner())
-    print()
     parser = _build_parser()
     try:
         args = parser.parse_args(argv)
     except SystemExit:
+        print(render_banner())
+        print()
         print(render_help())
         return 2
+
+    if getattr(args, "version", False) or args.command == "version":
+        print(__version__)
+        return 0
+
+    print(render_banner())
+    print()
 
     if args.command == "add":
         summary = run_add(
@@ -85,10 +92,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "update":
         result = run_update()
         return result.returncode
-
-    if args.command == "shell-init":
-        run_shell_init(install=args.install)
-        return 0
 
     print(render_help())
     return 0 if args.command == "help" else 2

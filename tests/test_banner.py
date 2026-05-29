@@ -7,8 +7,9 @@ def test_banner_contains_word_mint():
 
 
 def test_banner_contains_version_and_tagline():
+    from mint import __version__
     out = render_banner()
-    assert "v0.1.0" in out
+    assert f"v{__version__}" in out
     assert "youtube" in out.lower()
     assert "apple music" in out.lower()
 

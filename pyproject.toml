@@ -1,6 +1,6 @@
 [project]
 name = "mint"
-version = "0.1.0"
+dynamic = ["version"]
 description = "YouTube to Apple Music with MusicBrainz-correct ID3 tags"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -20,10 +20,15 @@ dev = ["pytest>=8.0"]
 mint = "mint.cli:main"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["mint*"]
 exclude = ["tests*"]
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+fallback_version = "0.0.0+unknown"
