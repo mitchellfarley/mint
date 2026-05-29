@@ -19,4 +19,4 @@ def render_banner() -> str:
     fig = Figlet(font="standard")
     art = fig.renderText("mint").rstrip("\n")
     tagline = f"mint v{__version__} — youtube → apple music"
-    return f"{art}\n\n{tagline}\n\n{_LEAF}"
+    return f"{art}\n\n{_LEAF}\n\n{tagline}"
