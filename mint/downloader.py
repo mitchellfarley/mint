@@ -1,15 +1,36 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 
-def download_url(youtube_url: str, output_dir: Path) -> list[tuple[Path, str]]:
+@dataclass
+class DownloadedTrack:
+    path: Path
+    title: str
+    uploader: str
+    artist: str
+    track: str
+
+
+def _clean_uploader(s: str) -> str:
+    s = s.strip()
+    for suffix in (" - Topic", "VEVO", "Vevo"):
+        if s.endswith(suffix):
+            s = s[: -len(suffix)].strip()
+    return s
+
+
+def download_url(youtube_url: str, output_dir: Path) -> list[DownloadedTrack]:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_template = str(output_dir / "%(id)s.%(ext)s")
-    proc = subprocess.run(
+    meta_file = output_dir / ".titles.tsv"
+    if meta_file.exists():
+        meta_file.unlink()
+    fmt = "%(id)s\t%(title)s\t%(uploader)s\t%(artist,creator,uploader)s\t%(track,title)s"
+    subprocess.run(
         [
             sys.executable, "-m", "yt_dlp",
             youtube_url,
@@ -17,24 +38,33 @@ def download_url(youtube_url: str, output_dir: Path) -> list[tuple[Path, str]]:
             "--audio-format", "mp3",
             "--audio-quality", "0",
             "-o", output_template,
-            "--print-to-file", "%(id)s\t%(title)s", str(output_dir / ".titles.tsv"),
+            "--print-to-file", fmt, str(meta_file),
             "--no-progress",
         ],
         cwd=str(output_dir),
         check=False,
     )
-    titles_file = output_dir / ".titles.tsv"
-    titles: dict[str, str] = {}
-    if titles_file.exists():
-        for line in titles_file.read_text().splitlines():
-            if "\t" not in line:
-                continue
-            vid, title = line.split("\t", 1)
-            titles[vid] = title
-        titles_file.unlink(missing_ok=True)
 
-    result: list[tuple[Path, str]] = []
+    meta: dict[str, tuple[str, str, str, str]] = {}
+    if meta_file.exists():
+        for line in meta_file.read_text().splitlines():
+            parts = line.split("\t")
+            if len(parts) < 5:
+                continue
+            vid, title, uploader, artist, track = parts[:5]
+            meta[vid] = (title, uploader, artist, track)
+        meta_file.unlink(missing_ok=True)
+
+    result: list[DownloadedTrack] = []
     for mp3 in sorted(output_dir.rglob("*.mp3")):
-        title = titles.get(mp3.stem, mp3.stem)
-        result.append((mp3, title))
+        title, uploader, artist, track = meta.get(
+            mp3.stem, (mp3.stem, "", "", "")
+        )
+        result.append(DownloadedTrack(
+            path=mp3,
+            title=title,
+            uploader=_clean_uploader(uploader),
+            artist=artist if artist != "NA" else "",
+            track=track if track != "NA" else "",
+        ))
     return result

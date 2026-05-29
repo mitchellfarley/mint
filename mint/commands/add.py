@@ -47,15 +47,25 @@ def run_add(
     client = MBClient(cache=cache, user_agent=user_agent)
 
     total = len(downloaded)
-    for idx, (path, video_title) in enumerate(downloaded, start=1):
-        parsed = parse_title(video_title)
-        if parsed is None:
-            summary.failed += 1
-            summary.failed_titles.append(video_title or path.name)
-            _print_step(idx, total, "failed", video_title or path.name, "unparseable title")
-            continue
+    for idx, d in enumerate(downloaded, start=1):
+        path = d.path
+        artist = ""
+        title = ""
 
-        artist, title = parsed.artist, parsed.track
+        if d.artist and d.track:
+            artist, title = d.artist, d.track
+        else:
+            parsed = parse_title(d.title)
+            if parsed is not None:
+                artist, title = parsed.artist, parsed.track
+            elif d.uploader:
+                artist, title = d.uploader, d.title
+
+        if not artist or not title:
+            summary.failed += 1
+            summary.failed_titles.append(d.title or path.name)
+            _print_step(idx, total, "failed", d.title or path.name, "unparseable title")
+            continue
 
         if (normalize_for_dupe(artist), normalize_for_dupe(title)) in dupe_index:
             path.unlink(missing_ok=True)
