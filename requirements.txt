@@ -2,5 +2,5 @@ mutagen>=1.47
 musicbrainzngs>=0.7.1
 requests>=2.31
 pyfiglet>=1.0
-spotdl>=4.2
+yt-dlp>=2024.10.7
 pytest>=8.0

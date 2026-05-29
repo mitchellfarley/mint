@@ -58,6 +58,34 @@ def _build_mb_release(detail: dict, candidates: list[str]) -> MBRelease:
     )
 
 
+def _pick_release_from_recording(recording: dict) -> tuple[str, int, int] | None:
+    rel_list = recording.get("release-list", [])
+    if not rel_list:
+        return None
+    official = [r for r in rel_list if r.get("status") == "Official"]
+    pool = official or rel_list
+
+    def _key(r: dict) -> tuple:
+        date = r.get("date") or "9999"
+        country = r.get("country") or ""
+        country_priority = 0 if country in ("US", "XW", "") else 1
+        rg = r.get("release-group", {}) or {}
+        primary = (rg.get("primary-type") or "").lower()
+        type_priority = 0 if primary == "album" else (1 if primary == "ep" else 2)
+        return (type_priority, date, country_priority)
+
+    pool_sorted = sorted(pool, key=_key)
+    rec_id = recording.get("id")
+    chosen = pool_sorted[0]
+    medium_list = chosen.get("medium-list", [])
+    for medium in medium_list:
+        disc = int(medium.get("position", 1))
+        for trk in medium.get("track-list", []):
+            if trk.get("recording", {}).get("id") == rec_id:
+                return chosen["id"], disc, int(trk.get("position", 0))
+    return chosen["id"], 1, 1
+
+
 class MBClient:
     def __init__(self, cache: MBCache, user_agent: tuple[str, str, str] | None = None) -> None:
         self.cache = cache
@@ -94,6 +122,50 @@ class MBClient:
         )
         self.cache.set(key, {"detail": detail, "candidates": candidate_ids})
         return _build_mb_release(detail, candidate_ids)
+
+    def lookup_recording(self, artist: str, title: str) -> tuple[MBRelease, int, int] | None:
+        rec_key = f"rec::{cache_key(artist, title)}"
+        cached = self.cache.get(rec_key)
+        if cached is not None:
+            release_id = cached["release_id"]
+            disc = int(cached["disc"])
+            position = int(cached["position"])
+        else:
+            self._throttle()
+            results = musicbrainzngs.search_recordings(
+                artist=artist, recording=title, limit=10
+            )
+            recordings = results.get("recording-list", [])
+            if not recordings:
+                return None
+            pick = None
+            for rec in recordings:
+                got = _pick_release_from_recording(rec)
+                if got is not None:
+                    pick = got
+                    break
+            if pick is None:
+                return None
+            release_id, disc, position = pick
+            self.cache.set(rec_key, {
+                "release_id": release_id,
+                "disc": disc,
+                "position": position,
+            })
+
+        release_key = f"rid::{release_id}"
+        cached_rel = self.cache.get(release_key)
+        if cached_rel is not None:
+            mb_release = _build_mb_release(cached_rel["detail"], cached_rel["candidates"])
+        else:
+            self._throttle()
+            detail = musicbrainzngs.get_release_by_id(
+                release_id,
+                includes=["recordings", "artist-credits"],
+            )
+            self.cache.set(release_key, {"detail": detail, "candidates": [release_id]})
+            mb_release = _build_mb_release(detail, [release_id])
+        return mb_release, disc, position
 
     def fetch_cover(self, release_ids: Iterable[str]) -> bytes | None:
         for rid in release_ids:

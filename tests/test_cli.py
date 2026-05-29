@@ -18,7 +18,7 @@ def test_cli_add_dispatches(capsys):
         r.return_value.skipped = 0
         r.return_value.failed = 0
         r.return_value.failed_titles = []
-        rc = main(["add", "https://open.spotify.com/track/x"])
+        rc = main(["add", "https://youtube.com/watch?v=abc123"])
     assert rc == 0
     r.assert_called_once()
 

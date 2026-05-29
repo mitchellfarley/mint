@@ -10,10 +10,10 @@ from mint.config import CACHE_DB, LIBRARY_ROOT, MB_USER_AGENT, STAGING_DIR
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="mint", description="Spotify → Apple Music")
+    p = argparse.ArgumentParser(prog="mint", description="YouTube → Apple Music")
     sub = p.add_subparsers(dest="command")
-    add_p = sub.add_parser("add", help="download Spotify URL and import")
-    add_p.add_argument("url", help="Spotify track/album/playlist URL")
+    add_p = sub.add_parser("add", help="download YouTube URL and import")
+    add_p.add_argument("url", help="YouTube video/playlist URL")
     sub.add_parser("fix", help="audit library and apply fixes")
     return p
 
@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "add":
         summary = run_add(
-            spotify_url=args.url,
+            youtube_url=args.url,
             library_root=LIBRARY_ROOT,
             staging_dir=STAGING_DIR,
             cache_db=CACHE_DB,

@@ -12,6 +12,7 @@ from mint.mb_cache import MBCache
 from mint.mb_client import MBClient
 from mint.mover import destination_path, move_to_library
 from mint.tagger import read_track
+from mint.title_parser import parse_title
 
 
 @dataclass
@@ -27,7 +28,7 @@ def _print_step(idx: int, total: int, label: str, title: str, result: str) -> No
 
 
 def run_add(
-    spotify_url: str,
+    youtube_url: str,
     library_root: Path,
     staging_dir: Path,
     cache_db: Path,
@@ -36,7 +37,7 @@ def run_add(
     summary = AddSummary()
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    downloaded = download_url(spotify_url, staging_dir)
+    downloaded = download_url(youtube_url, staging_dir)
     if not downloaded:
         return summary
 
@@ -46,46 +47,48 @@ def run_add(
     client = MBClient(cache=cache, user_agent=user_agent)
 
     total = len(downloaded)
-    for idx, path in enumerate(downloaded, start=1):
-        try:
-            track = read_track(path)
-        except Exception as e:
+    for idx, (path, video_title) in enumerate(downloaded, start=1):
+        parsed = parse_title(video_title)
+        if parsed is None:
             summary.failed += 1
-            summary.failed_titles.append(path.name)
-            _print_step(idx, total, "failed", path.name, f"read error: {e}")
+            summary.failed_titles.append(video_title or path.name)
+            _print_step(idx, total, "failed", video_title or path.name, "unparseable title")
             continue
 
-        artist = track.tpe2 or track.tpe1
-        title = track.tit2
+        artist, title = parsed.artist, parsed.track
+
         if (normalize_for_dupe(artist), normalize_for_dupe(title)) in dupe_index:
             path.unlink(missing_ok=True)
             summary.skipped += 1
-            _print_step(idx, total, "duplicate", title or path.name, "skipped")
+            _print_step(idx, total, "duplicate", title, "skipped")
             continue
 
-        mb_release = client.lookup_release(artist, track.talb)
-        if mb_release is None:
+        lookup = client.lookup_recording(artist, title)
+        if lookup is None:
             summary.failed += 1
-            summary.failed_titles.append(title or path.name)
-            _print_step(idx, total, "failed", title or path.name, "no MB match")
+            summary.failed_titles.append(title)
+            _print_step(idx, total, "failed", title, "no MB match")
             continue
 
-        match = None
-        for (disc, pos), mbt in mb_release.tracks.items():
-            if normalize_for_dupe(mbt.title) == normalize_for_dupe(title):
-                match = (disc, pos)
-                break
-        if match is None:
+        mb_release, disc, position = lookup
+        if (disc, position) not in mb_release.tracks:
             summary.failed += 1
-            summary.failed_titles.append(title or path.name)
-            _print_step(idx, total, "failed", title or path.name, "no track match")
+            summary.failed_titles.append(title)
+            _print_step(idx, total, "failed", title, "track not in release")
             continue
+
+        try:
+            track = read_track(path)
+        except Exception:
+            track = None
+        existing_genre = track.tcon if track else ""
+        has_cover = track.has_apic if track else False
 
         artist_key = normalize_for_dupe(mb_release.artist_credit_phrase)
-        genre = genre_index.get(artist_key) or track.tcon or ""
-        proposed = propose_fixes(mb_release, disc=match[0], position=match[1],
+        genre = genre_index.get(artist_key) or existing_genre or ""
+        proposed = propose_fixes(mb_release, disc=disc, position=position,
                                   desired_genre=genre)
-        cover = client.fetch_cover(mb_release.candidate_release_ids) if not track.has_apic else None
+        cover = client.fetch_cover(mb_release.candidate_release_ids) if not has_cover else None
         apply_proposed(path, proposed, cover_data=cover)
 
         dst = destination_path(library_root, proposed.tpe2, proposed.talb,

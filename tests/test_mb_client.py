@@ -102,3 +102,68 @@ def test_fetch_cover_caches(tmp_path):
         client.fetch_cover(["rid-1"])
         client.fetch_cover(["rid-1"])
     assert get.call_count == 1
+
+
+def _fake_recording_search():
+    return {
+        "recording-list": [
+            {
+                "id": "rec2",
+                "title": "Feel Good Inc.",
+                "release-list": [
+                    {
+                        "id": "rid-1",
+                        "title": "Demon Days",
+                        "date": "2005-05-11",
+                        "country": "US",
+                        "status": "Official",
+                        "release-group": {"primary-type": "Album"},
+                        "medium-list": [
+                            {
+                                "position": "1",
+                                "track-count": 2,
+                                "track-list": [
+                                    {"position": "1", "id": "t1", "recording": {"id": "rec1"}},
+                                    {"position": "2", "id": "t2", "recording": {"id": "rec2"}},
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+
+def test_lookup_recording_returns_release_and_position(tmp_path):
+    cache = MBCache(tmp_path / "mb.db")
+    with patch("mint.mb_client.musicbrainzngs") as mb:
+        mb.search_recordings.return_value = _fake_recording_search()
+        mb.get_release_by_id.return_value = _fake_release_detail()
+        client = MBClient(cache=cache)
+        got = client.lookup_recording("Gorillaz", "Feel Good Inc.")
+    assert got is not None
+    rel, disc, position = got
+    assert rel.release_id == "rid-1"
+    assert disc == 1
+    assert position == 2
+
+
+def test_lookup_recording_no_match_returns_none(tmp_path):
+    cache = MBCache(tmp_path / "mb.db")
+    with patch("mint.mb_client.musicbrainzngs") as mb:
+        mb.search_recordings.return_value = {"recording-list": []}
+        client = MBClient(cache=cache)
+        assert client.lookup_recording("Unknown", "Unknown") is None
+
+
+def test_lookup_recording_uses_cache_on_second_call(tmp_path):
+    cache = MBCache(tmp_path / "mb.db")
+    with patch("mint.mb_client.musicbrainzngs") as mb:
+        mb.search_recordings.return_value = _fake_recording_search()
+        mb.get_release_by_id.return_value = _fake_release_detail()
+        client = MBClient(cache=cache)
+        client.lookup_recording("Gorillaz", "Feel Good Inc.")
+        client.lookup_recording("Gorillaz", "Feel Good Inc.")
+    assert mb.search_recordings.call_count == 1
+    assert mb.get_release_by_id.call_count == 1

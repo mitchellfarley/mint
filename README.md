@@ -1,10 +1,10 @@
 # mint
 
-Spotify → Apple Music with MusicBrainz-correct ID3 tags.
+YouTube → Apple Music with MusicBrainz-correct ID3 tags.
 
 ## Commands
 
-- `mint add <spotify-url>` — download from Spotify, tag, import
+- `mint add <youtube-url>` — download from YouTube, tag, import
 - `mint fix` — audit library, report issues, apply fixes after approval
 
 ## Install
