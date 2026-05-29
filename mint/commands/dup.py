@@ -5,6 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from mint.itunes import remove_track
 from mint.library import normalize_for_dupe, walk_library
 from mint.tagger import read_track
 
@@ -21,7 +22,9 @@ def _normalize_artist(s: str) -> str:
 class DupResult:
     track_groups: dict[tuple[str, str], list[Path]] = field(default_factory=dict)
     album_groups: dict[tuple[str, str], list[Path]] = field(default_factory=dict)
-    artist_groups: dict[str, list[Path]] = field(default_factory=dict)
+    artist_groups: dict[str, list[str]] = field(default_factory=dict)
+    removed: int = 0
+    aborted: bool = False
 
 
 def run_dup(library_root: Path) -> DupResult:
@@ -30,7 +33,7 @@ def run_dup(library_root: Path) -> DupResult:
     print(f"  {len(paths)} tracks", flush=True)
 
     tracks_by_key: dict[tuple[str, str], list[Path]] = defaultdict(list)
-    albums_by_key: dict[tuple[str, str], list[Path]] = defaultdict(set)
+    albums_by_key: dict[tuple[str, str], set] = defaultdict(set)
     artists_by_key: dict[str, set[str]] = defaultdict(set)
     artist_display: dict[str, str] = {}
 
@@ -50,8 +53,7 @@ def run_dup(library_root: Path) -> DupResult:
         artist_display.setdefault(a_key, artist)
 
         if album:
-            album_dir = p.parent
-            albums_by_key[(a_key, normalize_for_dupe(album))].add(album_dir)
+            albums_by_key[(a_key, normalize_for_dupe(album))].add(p.parent)
 
         if title:
             tracks_by_key[(a_key, normalize_for_dupe(title))].append(p)
@@ -77,6 +79,7 @@ def run_dup(library_root: Path) -> DupResult:
             print(f"  {artist_display[key]}")
             for v in variants:
                 print(f"    {v}")
+        print("  (manual rename/merge required)")
 
     if album_dupes:
         print()
@@ -85,6 +88,7 @@ def run_dup(library_root: Path) -> DupResult:
             print(f"  {artist_display.get(a_key, a_key)} — {dirs[0].name}")
             for d in dirs:
                 print(f"    {d}")
+        print("  (manual merge required)")
 
     if track_dupes:
         total_extra = sum(len(v) - 1 for v in track_dupes.values())
@@ -93,7 +97,32 @@ def run_dup(library_root: Path) -> DupResult:
         for (a_key, _), files in sorted(track_dupes.items()):
             first = read_track(files[0])
             print(f"  {first.tpe2 or first.tpe1} — {first.tit2}")
-            for f in files:
-                print(f"    {f}")
+            for i, f in enumerate(files):
+                marker = "keep" if i == 0 else "delete"
+                print(f"    [{marker}] {f}")
+
+        print()
+        prompt = f"Delete {total_extra} extra track file(s)? [y/N] "
+        print(prompt, end="", flush=True)
+        answer = input("").strip().lower()
+        if answer != "y":
+            print("Aborted, no files removed.")
+            result.aborted = True
+            return result
+
+        removed = 0
+        for files in track_dupes.values():
+            keep = files[0]
+            for victim in files[1:]:
+                try:
+                    t = read_track(victim)
+                except Exception:
+                    t = None
+                victim.unlink(missing_ok=True)
+                if t and t.tit2:
+                    remove_track(t.tit2, t.tpe1 or t.tpe2 or "")
+                removed += 1
+        result.removed = removed
+        print(f"Removed {removed} duplicate track file(s).")
 
     return result

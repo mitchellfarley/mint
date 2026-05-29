@@ -21,6 +21,19 @@ def import_file(path: str) -> int:
     return _osascript(script)
 
 
+def remove_track(title: str, artist: str) -> int:
+    script = (
+        f'tell application "Music"\n'
+        f'  set found to (every track of library playlist 1 '
+        f'whose name is "{_escape(title)}" and artist is "{_escape(artist)}")\n'
+        f'  repeat with t in found\n'
+        f'    delete t\n'
+        f'  end repeat\n'
+        f'end tell'
+    )
+    return _osascript(script)
+
+
 def remove_album(album: str) -> int:
     script = (
         f'tell application "Music"\n'

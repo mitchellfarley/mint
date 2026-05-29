@@ -9,7 +9,7 @@ def test_normalize_artist_case_insensitive():
     assert _normalize_artist("Radiohead") == _normalize_artist("RADIOHEAD")
 
 
-def test_run_dup_finds_track_duplicates(tmp_path, make_mp3, capsys):
+def test_run_dup_finds_track_duplicates(tmp_path, make_mp3, capsys, monkeypatch):
     root = tmp_path / "Library"
     (root / "Gorillaz" / "Demon Days").mkdir(parents=True)
     (root / "Gorillaz" / "Greatest Hits").mkdir(parents=True)
@@ -20,13 +20,36 @@ def test_run_dup_finds_track_duplicates(tmp_path, make_mp3, capsys):
     make_mp3(name=str(root / "Gorillaz" / "Greatest Hits" / "03 Feel Good Inc..mp3"),
              tit2="Feel Good Inc.", tpe1="Gorillaz", tpe2="Gorillaz",
              talb="Greatest Hits")
+    monkeypatch.setattr("builtins.input", lambda _: "n")
 
     result = run_dup(library_root=root)
 
     assert len(result.track_groups) == 1
+    assert result.aborted is True
     out = capsys.readouterr().out
     assert "Duplicate tracks" in out
     assert "Feel Good Inc." in out
+
+
+def test_run_dup_deletes_extras_on_confirm(tmp_path, make_mp3, monkeypatch):
+    root = tmp_path / "Library"
+    (root / "Gorillaz" / "Demon Days").mkdir(parents=True)
+    (root / "Gorillaz" / "Greatest Hits").mkdir(parents=True)
+
+    keep = make_mp3(name=str(root / "Gorillaz" / "Demon Days" / "06 Feel Good Inc..mp3"),
+                    tit2="Feel Good Inc.", tpe1="Gorillaz", tpe2="Gorillaz",
+                    talb="Demon Days")
+    extra = make_mp3(name=str(root / "Gorillaz" / "Greatest Hits" / "03 Feel Good Inc..mp3"),
+                     tit2="Feel Good Inc.", tpe1="Gorillaz", tpe2="Gorillaz",
+                     talb="Greatest Hits")
+    monkeypatch.setattr("builtins.input", lambda _: "y")
+    monkeypatch.setattr("mint.commands.dup.remove_track", lambda title, artist: 0)
+
+    result = run_dup(library_root=root)
+
+    assert result.removed == 1
+    assert keep.exists()
+    assert not extra.exists()
 
 
 def test_run_dup_finds_artist_duplicates(tmp_path, make_mp3, capsys):

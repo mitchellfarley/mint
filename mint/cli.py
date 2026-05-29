@@ -15,7 +15,7 @@ from mint.config import CACHE_DB, LIBRARY_ROOT, MB_USER_AGENT, STAGING_DIR
 COMMANDS = [
     ("add <url>",  "download YouTube URL, tag, import into Apple Music"),
     ("clean",      "audit library, propose ID3 fixes, apply on approval"),
-    ("dup",        "list duplicate tracks in the library"),
+    ("dup",        "find and remove duplicate tracks, albums, artists"),
     ("update",     "upgrade mint to the latest version from GitHub"),
     ("version",    "print the installed version"),
     ("help",       "show this help"),
