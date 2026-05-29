@@ -151,7 +151,7 @@ class MBClient:
     def lookup_recording(self, artist: str, title: str) -> tuple[MBRelease, int, int] | None:
         rec_key = f"rec::{cache_key(artist, title)}"
         cached = self.cache.get(rec_key)
-        if cached is not None:
+        if cached is not None and "recording_id" in cached and "release_id" in cached:
             release_id = cached["release_id"]
             recording_id = cached["recording_id"]
         else:
