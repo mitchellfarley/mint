@@ -16,11 +16,30 @@ tags and cover art, and imports the file into Apple Music.
 
 ## Install
 
+Recommended (macOS, Homebrew Python): use [pipx](https://pipx.pypa.io/) so
+`mint` lives in its own venv and is exposed on `PATH`.
+
 ```bash
+brew install pipx
+pipx ensurepath
+pipx install git+https://github.com/mitchellfarley/mint.git
+```
+
+Restart your shell, then `mint` is available globally. Upgrade later with:
+
+```bash
+pipx upgrade mint
+```
+
+Alternatively, install into a virtual environment with pip:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install git+https://github.com/mitchellfarley/mint.git
 ```
 
-Or, from a local clone:
+Or from a local clone, for development:
 
 ```bash
 git clone https://github.com/mitchellfarley/mint.git
