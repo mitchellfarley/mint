@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Iterator
@@ -12,6 +13,7 @@ _FEAT_PAREN_RE = re.compile(r"\s*[\(\[](?:feat\.?|ft\.?)[^)\]]*[\)\]]", re.IGNOR
 _PUNCT_RE = re.compile(r"[^\w\s]")
 _WS_RE = re.compile(r"\s+")
 _FEAT_SUFFIX_RE = re.compile(r"\s+(?:feat\.?|ft\.?)\s+.+$", re.IGNORECASE)
+_AMP_RE = re.compile(r"\s*(?:,|&|;|\bx\b|\band\b|\bvs\.?\b)\s*", re.IGNORECASE)
 
 
 def normalize_for_dupe(s: str) -> str:
@@ -20,6 +22,34 @@ def normalize_for_dupe(s: str) -> str:
     s = _PUNCT_RE.sub("", s)
     s = _WS_RE.sub(" ", s).strip()
     return s.lower()
+
+
+def strip_diacritics(s: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", s)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def primary_artist(s: str) -> str:
+    s = _FEAT_PAREN_RE.sub("", s)
+    s = _FEAT_SUFFIX_RE.sub("", s)
+    s = _AMP_RE.split(s, maxsplit=1)[0]
+    return s.strip()
+
+
+def normalize_for_mb_search(s: str) -> str:
+    s = strip_diacritics(s)
+    s = _WS_RE.sub(" ", s).strip()
+    return s
+
+
+def normalize_artist_for_mb(s: str) -> str:
+    return normalize_for_mb_search(primary_artist(s))
+
+
+def normalize_title_for_mb(s: str) -> str:
+    s = _FEAT_PAREN_RE.sub("", s)
+    s = _FEAT_SUFFIX_RE.sub("", s)
+    return normalize_for_mb_search(s)
 
 
 def walk_library(root: Path) -> Iterator[Path]:
