@@ -9,7 +9,7 @@ def test_banner_contains_word_mint():
 def test_banner_contains_version_and_tagline():
     out = render_banner()
     assert "v0.1.0" in out
-    assert "spotify" in out.lower()
+    assert "youtube" in out.lower()
     assert "apple music" in out.lower()
 
 

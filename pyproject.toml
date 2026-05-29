@@ -3,6 +3,8 @@ name = "mint"
 version = "0.1.0"
 description = "YouTube to Apple Music with MusicBrainz-correct ID3 tags"
 requires-python = ">=3.12"
+license = { text = "MIT" }
+readme = "README.md"
 dependencies = [
     "mutagen>=1.47",
     "musicbrainzngs>=0.7.1",

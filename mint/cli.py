@@ -9,20 +9,44 @@ from mint.commands.fix import run_fix
 from mint.config import CACHE_DB, LIBRARY_ROOT, MB_USER_AGENT, STAGING_DIR
 
 
+COMMANDS = [
+    ("add <url>", "download YouTube URL, tag, import into Apple Music"),
+    ("fix",       "audit library, propose ID3 fixes, apply on approval"),
+    ("help",      "show this help"),
+]
+
+
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="mint", description="YouTube → Apple Music")
+    p = argparse.ArgumentParser(prog="mint", add_help=False)
     sub = p.add_subparsers(dest="command")
-    add_p = sub.add_parser("add", help="download YouTube URL and import")
-    add_p.add_argument("url", help="YouTube video/playlist URL")
-    sub.add_parser("fix", help="audit library and apply fixes")
+    add_p = sub.add_parser("add", add_help=False)
+    add_p.add_argument("url")
+    sub.add_parser("fix", add_help=False)
+    sub.add_parser("help", add_help=False)
     return p
+
+
+def render_help() -> str:
+    width = max(len(name) for name, _ in COMMANDS)
+    lines = ["Usage:", "  mint <command> [args]", "", "Commands:"]
+    for name, desc in COMMANDS:
+        lines.append(f"  {name:<{width}}   {desc}")
+    lines.append("")
+    lines.append("Examples:")
+    lines.append("  mint add https://www.youtube.com/watch?v=VIDEO_ID")
+    lines.append("  mint fix")
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
     print(render_banner())
     print()
     parser = _build_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        print(render_help())
+        return 2
 
     if args.command == "add":
         summary = run_add(
@@ -51,8 +75,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    parser.print_help()
-    return 2
+    print(render_help())
+    return 0 if args.command == "help" else 2
 
 
 if __name__ == "__main__":

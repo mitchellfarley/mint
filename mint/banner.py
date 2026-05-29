@@ -8,5 +8,5 @@ from mint import __version__
 def render_banner() -> str:
     fig = Figlet(font="standard")
     art = fig.renderText("mint").rstrip("\n")
-    tagline = f"mint v{__version__} — spotify → apple music"
+    tagline = f"mint v{__version__} — youtube → apple music"
     return f"{art}\n\n{tagline}"

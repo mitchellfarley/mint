@@ -1,18 +1,35 @@
 from unittest.mock import patch
 
-from mint.cli import main
+from mint.cli import main, render_help
 
 
-def test_cli_no_args_prints_banner_and_usage(capsys):
+def test_render_help_lists_all_commands():
+    h = render_help()
+    assert "add" in h
+    assert "fix" in h
+    assert "help" in h
+    assert "Usage:" in h
+    assert "Commands:" in h
+
+
+def test_cli_no_args_prints_banner_and_help(capsys):
     rc = main([])
     out = capsys.readouterr().out
     assert "mint" in out.lower()
     assert "add" in out
     assert "fix" in out
+    assert "Usage:" in out
     assert rc != 0
 
 
-def test_cli_add_dispatches(capsys):
+def test_cli_help_command_returns_zero(capsys):
+    rc = main(["help"])
+    out = capsys.readouterr().out
+    assert "Usage:" in out
+    assert rc == 0
+
+
+def test_cli_add_dispatches():
     with patch("mint.cli.run_add") as r:
         r.return_value.imported = 1
         r.return_value.skipped = 0
