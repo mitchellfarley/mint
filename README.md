@@ -25,10 +25,12 @@ pipx ensurepath
 pipx install git+https://github.com/mitchellfarley/mint.git
 ```
 
-Restart your shell, then `mint` is available globally. Upgrade later with:
+Restart your shell, then `mint` is available globally. Upgrade later with
+either:
 
 ```bash
-pipx upgrade mint
+mint update          # uses pipx if available, otherwise pip
+pipx upgrade mint    # equivalent direct invocation
 ```
 
 Alternatively, install into a virtual environment with pip:
@@ -65,6 +67,7 @@ Usage:
 Commands:
   add <url>   download YouTube URL, tag, import into Apple Music
   clean       audit library, propose ID3 fixes, apply on approval
+  update      upgrade mint to the latest version from GitHub
   help        show this help
 ```
 
