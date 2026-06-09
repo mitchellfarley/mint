@@ -8,7 +8,7 @@ from typing import Callable, Iterable
 import musicbrainzngs
 import requests
 
-from mint.library import normalize_for_dupe
+from mint.library import normalize_for_dupe, strip_diacritics
 from mint.mb_cache import MBCache
 from mint.models import MBRelease, MBTrack
 
@@ -223,10 +223,10 @@ class MBClient:
             if not recordings:
                 return None
 
-            query_norm = normalize_for_dupe(title)
+            query_norm = normalize_for_dupe(strip_diacritics(title))
             matched_recordings = [
                 rec for rec in recordings
-                if normalize_for_dupe(rec.get("title", "")) == query_norm
+                if normalize_for_dupe(strip_diacritics(rec.get("title", ""))) == query_norm
             ]
             recordings_to_evaluate = matched_recordings or recordings
 
