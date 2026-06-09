@@ -23,8 +23,8 @@ def test_download_url_runs_yt_dlp_in_output_dir(tmp_path):
 
     def _fake_run(*a, **k):
         (staging / ".titles.tsv").write_text(
-            "abc123\tArtist A - Track A\tA Channel\tNA\tNA\tNA\tNA\tNA\n"
-            "def456\tAlready Home\tMarlon Funaki - Topic\tMarlon Funaki\tAlready Home\tNA\tNA\tNA\n"
+            "abc123\tArtist A - Track A\tA Channel\tNA\tNA\tNA\tNA\tNA\tNA\n"
+            "def456\tAlready Home\tMarlon Funaki - Topic\tMarlon Funaki\tAlready Home\tNA\tNA\tNA\tNA\n"
         )
         class _R:
             returncode = 0
@@ -59,9 +59,9 @@ def test_download_url_captures_playlist_metadata(tmp_path):
 
     def _fake_run(*a, **k):
         (staging / ".titles.tsv").write_text(
-            "vid1\tDrake - Rich Flex\tDrakeVEVO\tDrake\tRich Flex\t"
+            "vid1\tDrake - Rich Flex\tDrakeVEVO\tDrake\tRich Flex\tHer Loss\t"
             "PL123\tHer Loss\tDrake - Topic\n"
-            "vid2\tDrake - Major Distribution\tDrakeVEVO\tDrake\tMajor Distribution\t"
+            "vid2\tDrake - Major Distribution\tDrakeVEVO\tDrake\tMajor Distribution\tHer Loss\t"
             "PL123\tHer Loss\tDrake - Topic\n"
         )
         class _R:

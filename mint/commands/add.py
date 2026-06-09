@@ -17,7 +17,7 @@ from mint.library import (
     normalize_title_for_mb,
 )
 from mint.mb_cache import MBCache
-from mint.mb_client import MBClient
+from mint.mb_client import MBClient, find_track_position
 from mint.models import MBRelease
 from mint.mover import destination_path, move_to_library
 from mint.progress import progress, progress_done
@@ -164,17 +164,29 @@ def run_add(
             print(f"  duplicate, skipped: {artist} — {title}", flush=True)
             continue
 
-        if prompter is not None:
-            prompt_cb = prompter
-        elif sys.stdin.isatty() and sys.stdout.isatty():
-            prompt_cb = _interactive_prompter(label)
-        else:
-            prompt_cb = None
-        lookup = client.lookup_recording(
-            normalize_artist_for_mb(artist),
-            normalize_title_for_mb(title),
-            prompter=prompt_cb,
-        )
+        lookup: tuple[MBRelease, int, int] | None = None
+        if d.album:
+            release = client.lookup_release(
+                normalize_artist_for_mb(artist), d.album,
+            )
+            if release is not None:
+                pos = find_track_position(release, title)
+                if pos is not None:
+                    lookup = (release, pos[0], pos[1])
+
+        if lookup is None:
+            if prompter is not None:
+                prompt_cb = prompter
+            elif sys.stdin.isatty() and sys.stdout.isatty():
+                prompt_cb = _interactive_prompter(label)
+            else:
+                prompt_cb = None
+            lookup = client.lookup_recording(
+                normalize_artist_for_mb(artist),
+                normalize_title_for_mb(title),
+                prompter=prompt_cb,
+            )
+
         if lookup is None:
             summary.failed += 1
             summary.failed_titles.append(d.title or path.name)

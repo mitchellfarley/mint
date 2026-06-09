@@ -302,16 +302,16 @@ def test_lookup_recording_calls_prompter_when_ambiguous(tmp_path):
     cache = MBCache(tmp_path / "mb.db")
     detail = {
         "release": {
-            "id": "comp-1",
-            "title": "Now 113",
-            "date": "2022-11-18",
-            "artist-credit-phrase": "Various Artists",
+            "id": "album-2",
+            "title": "Her Loss (Deluxe)",
+            "date": "2023-01-01",
+            "artist-credit-phrase": "Drake & 21 Savage",
             "medium-list": [
                 {
                     "position": "1",
                     "track-count": 1,
                     "track-list": [
-                        {"position": "1", "recording": {"id": "rec-b", "title": "Rich Flex"}},
+                        {"position": "1", "recording": {"id": "rec-c", "title": "Rich Flex"}},
                     ],
                 }
             ],
@@ -336,10 +336,12 @@ def test_lookup_recording_calls_prompter_when_ambiguous(tmp_path):
         got = client.lookup_recording("Drake", "Rich Flex", prompter=prompter)
     assert got is not None
     rel, disc, position = got
-    assert rel.release_id == "comp-1"
+    # Various Artists rec-b is filtered out by the artist match. Prompter
+    # sees the remaining two Drake & 21 Savage candidates, picks idx 1.
+    assert rel.release_id == "album-2"
     assert len(seen) == 1
-    assert len(seen[0]) == 3
-    assert seen[0][1]["release_id"] == "comp-1"
+    assert len(seen[0]) == 2
+    assert all("Drake" in c["artist"] for c in seen[0])
 
 
 def test_lookup_recording_prompter_skip_returns_none(tmp_path):

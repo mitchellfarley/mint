@@ -127,6 +127,14 @@ def _candidate_summary(recording: dict, release: dict) -> dict:
     }
 
 
+def find_track_position(release: MBRelease, title: str) -> tuple[int, int] | None:
+    target = normalize_for_dupe(strip_diacritics(title))
+    for (disc, pos), trk in release.tracks.items():
+        if normalize_for_dupe(strip_diacritics(trk.title)) == target:
+            return disc, pos
+    return None
+
+
 def _find_position_in_detail(detail: dict, recording_id: str) -> tuple[int, int] | None:
     rel = detail["release"]
     for medium in rel.get("medium-list", []):
@@ -208,6 +216,7 @@ class MBClient:
         artist: str,
         title: str,
         prompter: Callable[[list[dict]], int | None] | None = None,
+        query_artist: str | None = None,
     ) -> tuple[MBRelease, int, int] | None:
         rec_key = f"rec::{cache_key(artist, title)}"
         cached = self.cache.get(rec_key)
@@ -224,9 +233,19 @@ class MBClient:
                 return None
 
             query_norm = normalize_for_dupe(strip_diacritics(title))
+            artist_q = query_artist if query_artist is not None else artist
+            artist_norm = normalize_for_dupe(strip_diacritics(artist_q))
+
+            def _artist_ok(rec: dict) -> bool:
+                ac = rec.get("artist-credit-phrase") or ""
+                if not ac:
+                    return True
+                return artist_norm in normalize_for_dupe(strip_diacritics(ac))
+
             matched_recordings = [
                 rec for rec in recordings
                 if normalize_for_dupe(strip_diacritics(rec.get("title", ""))) == query_norm
+                and _artist_ok(rec)
             ]
             recordings_to_evaluate = matched_recordings or recordings
 

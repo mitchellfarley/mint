@@ -13,6 +13,7 @@ class DownloadedTrack:
     uploader: str
     artist: str
     track: str
+    album: str = ""
     playlist_id: str = ""
     playlist_title: str = ""
     playlist_uploader: str = ""
@@ -42,7 +43,7 @@ def download_url(
         meta_file.unlink()
     fmt = (
         "%(id)s\t%(title)s\t%(uploader)s\t"
-        "%(artist,creator)s\t%(track)s\t"
+        "%(artist,creator)s\t%(track)s\t%(album)s\t"
         "%(playlist_id)s\t%(playlist_title)s\t"
         "%(playlist_uploader,playlist_channel)s"
     )
@@ -60,21 +61,21 @@ def download_url(
         cmd.extend(["--quiet", "--no-warnings"])
     subprocess.run(cmd, cwd=str(output_dir), check=False)
 
-    meta: dict[str, tuple[str, str, str, str, str, str, str]] = {}
+    meta: dict[str, tuple[str, str, str, str, str, str, str, str]] = {}
     if meta_file.exists():
         for line in meta_file.read_text().splitlines():
             parts = line.split("\t")
             if len(parts) < 5:
                 continue
-            parts = (parts + [""] * 8)[:8]
-            vid, title, uploader, artist, track, pl_id, pl_title, pl_uploader = parts
-            meta[vid] = (title, uploader, artist, track, pl_id, pl_title, pl_uploader)
+            parts = (parts + [""] * 9)[:9]
+            vid, title, uploader, artist, track, album, pl_id, pl_title, pl_uploader = parts
+            meta[vid] = (title, uploader, artist, track, album, pl_id, pl_title, pl_uploader)
         meta_file.unlink(missing_ok=True)
 
     result: list[DownloadedTrack] = []
     for mp3 in sorted(output_dir.glob("*.mp3")):
-        title, uploader, artist, track, pl_id, pl_title, pl_uploader = meta.get(
-            mp3.stem, (mp3.stem, "", "", "", "", "", "")
+        title, uploader, artist, track, album, pl_id, pl_title, pl_uploader = meta.get(
+            mp3.stem, (mp3.stem, "", "", "", "", "", "", "")
         )
         result.append(DownloadedTrack(
             path=mp3,
@@ -82,6 +83,7 @@ def download_url(
             uploader=_clean_uploader(uploader),
             artist=_na(artist),
             track=_na(track),
+            album=_na(album),
             playlist_id=_na(pl_id),
             playlist_title=_na(pl_title),
             playlist_uploader=_clean_uploader(_na(pl_uploader)),
