@@ -13,6 +13,9 @@ class DownloadedTrack:
     uploader: str
     artist: str
     track: str
+    playlist_id: str = ""
+    playlist_title: str = ""
+    playlist_uploader: str = ""
 
 
 def _clean_uploader(s: str) -> str:
@@ -21,6 +24,10 @@ def _clean_uploader(s: str) -> str:
         if s.endswith(suffix):
             s = s[: -len(suffix)].strip()
     return s
+
+
+def _na(value: str) -> str:
+    return "" if value == "NA" else value
 
 
 def download_url(
@@ -33,7 +40,12 @@ def download_url(
     meta_file = output_dir / ".titles.tsv"
     if meta_file.exists():
         meta_file.unlink()
-    fmt = "%(id)s\t%(title)s\t%(uploader)s\t%(artist,creator,uploader)s\t%(track,title)s"
+    fmt = (
+        "%(id)s\t%(title)s\t%(uploader)s\t"
+        "%(artist,creator,uploader)s\t%(track,title)s\t"
+        "%(playlist_id)s\t%(playlist_title)s\t"
+        "%(playlist_uploader,playlist_channel)s"
+    )
     cmd = [
         sys.executable, "-m", "yt_dlp",
         youtube_url,
@@ -48,26 +60,30 @@ def download_url(
         cmd.extend(["--quiet", "--no-warnings"])
     subprocess.run(cmd, cwd=str(output_dir), check=False)
 
-    meta: dict[str, tuple[str, str, str, str]] = {}
+    meta: dict[str, tuple[str, str, str, str, str, str, str]] = {}
     if meta_file.exists():
         for line in meta_file.read_text().splitlines():
             parts = line.split("\t")
             if len(parts) < 5:
                 continue
-            vid, title, uploader, artist, track = parts[:5]
-            meta[vid] = (title, uploader, artist, track)
+            parts = (parts + [""] * 8)[:8]
+            vid, title, uploader, artist, track, pl_id, pl_title, pl_uploader = parts
+            meta[vid] = (title, uploader, artist, track, pl_id, pl_title, pl_uploader)
         meta_file.unlink(missing_ok=True)
 
     result: list[DownloadedTrack] = []
-    for mp3 in sorted(output_dir.rglob("*.mp3")):
-        title, uploader, artist, track = meta.get(
-            mp3.stem, (mp3.stem, "", "", "")
+    for mp3 in sorted(output_dir.glob("*.mp3")):
+        title, uploader, artist, track, pl_id, pl_title, pl_uploader = meta.get(
+            mp3.stem, (mp3.stem, "", "", "", "", "", "")
         )
         result.append(DownloadedTrack(
             path=mp3,
             title=title,
             uploader=_clean_uploader(uploader),
-            artist=artist if artist != "NA" else "",
-            track=track if track != "NA" else "",
+            artist=_na(artist),
+            track=_na(track),
+            playlist_id=_na(pl_id),
+            playlist_title=_na(pl_title),
+            playlist_uploader=_clean_uploader(_na(pl_uploader)),
         ))
     return result

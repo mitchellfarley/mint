@@ -5,7 +5,7 @@ from pathlib import Path
 
 from mint.auditor import propose_fixes
 from mint.cleaner import apply_proposed
-from mint.downloader import download_url
+from mint.downloader import DownloadedTrack, download_url
 from mint.itunes import import_file
 from mint.library import (
     build_dupe_index,
@@ -16,6 +16,7 @@ from mint.library import (
 )
 from mint.mb_cache import MBCache
 from mint.mb_client import MBClient
+from mint.models import MBRelease
 from mint.mover import destination_path, move_to_library
 from mint.progress import progress, progress_done
 from mint.tagger import read_track
@@ -30,6 +31,68 @@ class AddSummary:
     failed_titles: list[str] = field(default_factory=list)
 
 
+def _parse(d: DownloadedTrack) -> tuple[str, str]:
+    if d.artist and d.track:
+        return d.artist, d.track
+    parsed = parse_title(d.title)
+    if parsed is not None:
+        return parsed.artist, parsed.track
+    if d.uploader:
+        return d.uploader, d.title
+    return "", ""
+
+
+def _tag_move_import(
+    path: Path,
+    mb_release: MBRelease,
+    disc: int,
+    position: int,
+    client: MBClient,
+    library_root: Path,
+    genre_index: dict[str, str],
+    idx: int,
+    total: int,
+    label: str,
+) -> str:
+    try:
+        track = read_track(path)
+    except Exception:
+        track = None
+    existing_genre = track.tcon if track else ""
+    has_cover = track.has_apic if track else False
+
+    artist_key = normalize_for_dupe(mb_release.artist_credit_phrase)
+    genre = genre_index.get(artist_key) or existing_genre or ""
+    proposed = propose_fixes(
+        mb_release, disc=disc, position=position, desired_genre=genre,
+    )
+
+    progress(
+        idx, total, label,
+        "fetching cover art..." if not has_cover else "writing tags...",
+    )
+    cover = (
+        client.fetch_cover(mb_release.candidate_release_ids)
+        if not has_cover else None
+    )
+
+    progress(idx, total, label, "writing tags...")
+    apply_proposed(path, proposed, cover_data=cover)
+
+    dst = destination_path(
+        library_root, proposed.tpe2, proposed.talb,
+        int(proposed.trck.split("/")[0]), proposed.tit2,
+    )
+    progress(idx, total, label, "moving to library...")
+    move_to_library(path, dst)
+
+    progress(idx, total, label, "importing to Apple Music...")
+    import_file(str(dst))
+
+    progress_done(idx, total, label, f"imported as {proposed.tit2}")
+    return proposed.tit2
+
+
 def run_add(
     youtube_url: str,
     library_root: Path,
@@ -40,7 +103,7 @@ def run_add(
     summary = AddSummary()
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Downloading from YouTube...", flush=True)
+    print("Downloading from YouTube...", flush=True)
     downloaded = download_url(youtube_url, staging_dir)
     if not downloaded:
         print("No audio downloaded.")
@@ -56,76 +119,42 @@ def run_add(
     total = len(downloaded)
     for idx, d in enumerate(downloaded, start=1):
         path = d.path
-        artist = ""
-        title = ""
-
-        if d.artist and d.track:
-            artist, title = d.artist, d.track
-        else:
-            parsed = parse_title(d.title)
-            if parsed is not None:
-                artist, title = parsed.artist, parsed.track
-            elif d.uploader:
-                artist, title = d.uploader, d.title
+        artist, title = _parse(d)
+        label = f"{artist or '?'} — {title or d.title}"
 
         if not artist or not title:
             summary.failed += 1
             summary.failed_titles.append(d.title or path.name)
-            progress_done(idx, total, d.title or path.name, "unparseable title")
+            progress_done(idx, total, label, "unparseable title")
             continue
-
-        label = f"{artist} — {title}"
 
         if (normalize_for_dupe(artist), normalize_for_dupe(title)) in dupe_index:
             path.unlink(missing_ok=True)
             summary.skipped += 1
-            progress_done(idx, total, label, "duplicate, skipped")
+            print(f"  duplicate, skipped: {artist} — {title}", flush=True)
             continue
 
-        mb_artist = normalize_artist_for_mb(artist)
-        mb_title = normalize_title_for_mb(title)
-        progress(idx, total, label, "looking up MusicBrainz...")
-        lookup = client.lookup_recording(mb_artist, mb_title)
+        lookup = client.lookup_recording(
+            normalize_artist_for_mb(artist),
+            normalize_title_for_mb(title),
+        )
         if lookup is None:
             summary.failed += 1
-            summary.failed_titles.append(title)
+            summary.failed_titles.append(d.title or path.name)
             progress_done(idx, total, label, "no MB match")
             continue
 
         mb_release, disc, position = lookup
         if (disc, position) not in mb_release.tracks:
             summary.failed += 1
-            summary.failed_titles.append(title)
+            summary.failed_titles.append(d.title or path.name)
             progress_done(idx, total, label, "track not in release")
             continue
 
-        try:
-            track = read_track(path)
-        except Exception:
-            track = None
-        existing_genre = track.tcon if track else ""
-        has_cover = track.has_apic if track else False
-
-        artist_key = normalize_for_dupe(mb_release.artist_credit_phrase)
-        genre = genre_index.get(artist_key) or existing_genre or ""
-        proposed = propose_fixes(mb_release, disc=disc, position=position,
-                                  desired_genre=genre)
-
-        progress(idx, total, label, "fetching cover art..." if not has_cover else "writing tags...")
-        cover = client.fetch_cover(mb_release.candidate_release_ids) if not has_cover else None
-
-        progress(idx, total, label, "writing tags...")
-        apply_proposed(path, proposed, cover_data=cover)
-
-        dst = destination_path(library_root, proposed.tpe2, proposed.talb,
-                                int(proposed.trck.split("/")[0]), proposed.tit2)
-        progress(idx, total, label, "moving to library...")
-        move_to_library(path, dst)
-
-        progress(idx, total, label, "importing to Apple Music...")
-        import_file(str(dst))
-
+        _tag_move_import(
+            path, mb_release, disc, position, client, library_root,
+            genre_index, idx, total, label,
+        )
         summary.imported += 1
-        progress_done(idx, total, label, f"imported as {proposed.tit2}")
 
     return summary

@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from mint.commands.add import run_add
 from mint.downloader import DownloadedTrack
@@ -20,10 +20,14 @@ def _fake_release():
     )
 
 
-def _dl(path, title="", uploader="", artist="", track=""):
+def _dl(path, title="", uploader="", artist="", track="",
+        playlist_id="", playlist_title="", playlist_uploader=""):
     return DownloadedTrack(
         path=path, title=title, uploader=uploader,
         artist=artist, track=track,
+        playlist_id=playlist_id,
+        playlist_title=playlist_title,
+        playlist_uploader=playlist_uploader,
     )
 
 
@@ -150,7 +154,7 @@ def test_run_add_falls_back_to_uploader_when_title_unparseable(tmp_path, make_mp
                                uploader="Marlon Funaki")]
         mbc.return_value.lookup_recording.return_value = (_fake_release(), 1, 6)
         mbc.return_value.fetch_cover.return_value = None
-        summary = run_add(
+        run_add(
             youtube_url="https://youtube.com/watch?v=abc",
             library_root=library_root,
             staging_dir=staging,

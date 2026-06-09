@@ -23,8 +23,8 @@ def test_download_url_runs_yt_dlp_in_output_dir(tmp_path):
 
     def _fake_run(*a, **k):
         (staging / ".titles.tsv").write_text(
-            "abc123\tArtist A - Track A\tA Channel\tNA\tNA\n"
-            "def456\tAlready Home\tMarlon Funaki - Topic\tMarlon Funaki\tAlready Home\n"
+            "abc123\tArtist A - Track A\tA Channel\tNA\tNA\tNA\tNA\tNA\n"
+            "def456\tAlready Home\tMarlon Funaki - Topic\tMarlon Funaki\tAlready Home\tNA\tNA\tNA\n"
         )
         class _R:
             returncode = 0
@@ -49,6 +49,35 @@ def test_download_url_runs_yt_dlp_in_output_dir(tmp_path):
     assert by_name["def456.mp3"].uploader == "Marlon Funaki"
     assert by_name["def456.mp3"].artist == "Marlon Funaki"
     assert by_name["def456.mp3"].track == "Already Home"
+
+
+def test_download_url_captures_playlist_metadata(tmp_path):
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "vid1.mp3").write_bytes(b"x")
+    (staging / "vid2.mp3").write_bytes(b"y")
+
+    def _fake_run(*a, **k):
+        (staging / ".titles.tsv").write_text(
+            "vid1\tDrake - Rich Flex\tDrakeVEVO\tDrake\tRich Flex\t"
+            "PL123\tHer Loss\tDrake - Topic\n"
+            "vid2\tDrake - Major Distribution\tDrakeVEVO\tDrake\tMajor Distribution\t"
+            "PL123\tHer Loss\tDrake - Topic\n"
+        )
+        class _R:
+            returncode = 0
+        return _R()
+
+    with patch("mint.downloader.subprocess.run", side_effect=_fake_run):
+        tracks = download_url("https://youtube.com/watch?v=vid1&list=PL123", staging)
+
+    by_name = {t.path.name: t for t in tracks}
+    t1 = by_name["vid1.mp3"]
+    assert t1.playlist_id == "PL123"
+    assert t1.playlist_title == "Her Loss"
+    assert t1.playlist_uploader == "Drake"
+    assert t1.artist == "Drake"
+    assert t1.track == "Rich Flex"
 
 
 def test_download_url_returns_empty_when_no_files_downloaded(tmp_path):
