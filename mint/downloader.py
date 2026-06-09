@@ -42,7 +42,7 @@ def download_url(
         meta_file.unlink()
     fmt = (
         "%(id)s\t%(title)s\t%(uploader)s\t"
-        "%(artist,creator,uploader)s\t%(track,title)s\t"
+        "%(artist,creator)s\t%(track)s\t"
         "%(playlist_id)s\t%(playlist_title)s\t"
         "%(playlist_uploader,playlist_channel)s"
     )

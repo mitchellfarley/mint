@@ -8,6 +8,7 @@ from typing import Callable, Iterable
 import musicbrainzngs
 import requests
 
+from mint.library import normalize_for_dupe
 from mint.mb_cache import MBCache
 from mint.models import MBRelease, MBTrack
 
@@ -107,6 +108,7 @@ def _candidate_summary(recording: dict, release: dict) -> dict:
     primary = rg.get("primary-type") or ""
     return {
         "recording_id": recording.get("id"),
+        "recording_title": recording.get("title", ""),
         "release_id": release.get("id"),
         "artist": (
             recording.get("artist-credit-phrase")
@@ -195,6 +197,16 @@ class MBClient:
                 candidates.append(_candidate_summary(rec, best))
             if not candidates:
                 return None
+
+            query_norm = normalize_for_dupe(title)
+            title_matches = [
+                c for c in candidates
+                if normalize_for_dupe(c.get("recording_title", "")) == query_norm
+            ]
+            candidates = title_matches if title_matches else candidates
+            candidates.sort(
+                key=lambda c: (c.get("quality", 0), c.get("year") or "9999")
+            )
 
             chosen_idx = 0
             if prompter is not None and len(candidates) > 1:
