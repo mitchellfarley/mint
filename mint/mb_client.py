@@ -18,6 +18,28 @@ RATE_LIMIT_SECONDS = 0.4
 
 _WS_RE = re.compile(r"\s+")
 
+_TRACK_VARIANT_RE = re.compile(
+    r"\s*[\(\[]\s*(?:"
+    r"radio\s+edit|single\s+edit|"
+    r"album\s+(?:version|mix|edit)|"
+    r"original\s+(?:mix|version)|"
+    r"extended\s+(?:mix|version)|"
+    r"explicit(?:\s+version)?|clean(?:\s+version)?|"
+    r"main(?:\s+version)?|"
+    r"remaster(?:ed)?(?:\s+\d{4})?|"
+    r"\d{4}\s+remaster(?:ed)?"
+    r")\s*[\)\]]\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_variant(title: str) -> str:
+    prev = None
+    while prev != title:
+        prev = title
+        title = _TRACK_VARIANT_RE.sub("", title).strip()
+    return title
+
 
 def cache_key(artist: str, album: str) -> str:
     def norm(s: str) -> str:
@@ -232,7 +254,7 @@ class MBClient:
             if not recordings:
                 return None
 
-            query_norm = normalize_for_dupe(strip_diacritics(title))
+            query_norm = normalize_for_dupe(strip_diacritics(_strip_variant(title)))
             artist_q = query_artist if query_artist is not None else artist
             artist_norm = normalize_for_dupe(strip_diacritics(artist_q))
 
@@ -242,10 +264,14 @@ class MBClient:
                     return True
                 return artist_norm in normalize_for_dupe(strip_diacritics(ac))
 
+            def _title_ok(rec: dict) -> bool:
+                rec_title = rec.get("title", "")
+                rec_norm = normalize_for_dupe(strip_diacritics(_strip_variant(rec_title)))
+                return rec_norm == query_norm
+
             matched_recordings = [
                 rec for rec in recordings
-                if normalize_for_dupe(strip_diacritics(rec.get("title", ""))) == query_norm
-                and _artist_ok(rec)
+                if _title_ok(rec) and _artist_ok(rec)
             ]
             recordings_to_evaluate = matched_recordings or recordings
 
