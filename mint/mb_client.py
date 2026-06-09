@@ -94,6 +94,15 @@ _DEMOTED_SECONDARY_TYPES = {
 }
 
 
+_STATUS_PENALTY = {
+    "bootleg": 50,
+    "pseudo-release": 50,
+    "withdrawn": 50,
+    "cancelled": 50,
+    "promotion": 20,
+}
+
+
 def _release_quality(release: dict) -> int:
     """Lower is better. 0 = canonical studio album, higher = less canonical."""
     rg = release.get("release-group", {}) or {}
@@ -101,14 +110,16 @@ def _release_quality(release: dict) -> int:
     secondaries = {s.lower() for s in (rg.get("secondary-type-list") or [])}
     if secondaries & _BAD_SECONDARY_TYPES:
         return 100
+    status = (release.get("status") or "").lower()
+    status_bonus = _STATUS_PENALTY.get(status, 0)
     demoted = bool(secondaries & _DEMOTED_SECONDARY_TYPES)
     if primary == "album":
-        return 30 if demoted else 0
+        return (30 if demoted else 0) + status_bonus
     if primary == "ep":
-        return 40 if demoted else 10
+        return (40 if demoted else 10) + status_bonus
     if primary == "single":
-        return 50 if demoted else 20
-    return 60
+        return (50 if demoted else 20) + status_bonus
+    return 60 + status_bonus
 
 
 def _pick_release_id_from_recording(recording: dict) -> str | None:
