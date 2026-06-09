@@ -1,6 +1,6 @@
 [project]
 name = "mint"
-version = "0.1.8"
+version = "0.1.9"
 description = "YouTube to Apple Music with MusicBrainz-correct ID3 tags"
 requires-python = ">=3.12"
 license = { text = "MIT" }
