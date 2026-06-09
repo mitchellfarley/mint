@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 import time
 import unicodedata
-from typing import Iterable
+from typing import Callable, Iterable
 
 import musicbrainzngs
 import requests
@@ -14,19 +15,22 @@ from mint.models import MBRelease, MBTrack
 COVER_ART_URL = "https://coverartarchive.org/release/{rid}/front"
 RATE_LIMIT_SECONDS = 0.4
 
+_WS_RE = re.compile(r"\s+")
+
 
 def cache_key(artist: str, album: str) -> str:
     def norm(s: str) -> str:
-        s = unicodedata.normalize("NFKC", s)
-        return s.lower().strip()
+        s = unicodedata.normalize("NFKD", s).encode("ascii", errors="ignore").decode("ascii")
+        return _WS_RE.sub(" ", s.lower()).strip()
     return f"{norm(artist)}::{norm(album)}"
 
 
 def _release_sort_key(release: dict) -> tuple:
+    quality = _release_quality(release)
     date = release.get("date") or "9999"
     country = release.get("country") or ""
     country_priority = 0 if country in ("US", "XW", "") else 1
-    return (date, country_priority)
+    return (quality, date, country_priority)
 
 
 def _build_mb_release(detail: dict, candidates: list[str]) -> MBRelease:
@@ -81,24 +85,40 @@ def _release_quality(release: dict) -> int:
 
 
 def _pick_release_id_from_recording(recording: dict) -> str | None:
+    best = _best_release_for_recording(recording)
+    return best["id"] if best is not None else None
+
+
+def _best_release_for_recording(recording: dict) -> dict | None:
     rel_list = recording.get("release-list", [])
     if not rel_list:
         return None
     official = [r for r in rel_list if r.get("status") == "Official"]
     pool = official or rel_list
-
-    def _key(r: dict) -> tuple:
-        quality = _release_quality(r)
-        date = r.get("date") or "9999"
-        country = r.get("country") or ""
-        country_priority = 0 if country in ("US", "XW", "") else 1
-        return (quality, date, country_priority)
-
-    pool_sorted = sorted(pool, key=_key)
+    pool_sorted = sorted(pool, key=_release_sort_key)
     chosen = pool_sorted[0]
     if _release_quality(chosen) >= 100:
         return None
-    return chosen["id"]
+    return chosen
+
+
+def _candidate_summary(recording: dict, release: dict) -> dict:
+    rg = release.get("release-group", {}) or {}
+    primary = rg.get("primary-type") or ""
+    return {
+        "recording_id": recording.get("id"),
+        "release_id": release.get("id"),
+        "artist": (
+            recording.get("artist-credit-phrase")
+            or release.get("artist-credit-phrase")
+            or ""
+        ),
+        "title": release.get("title", ""),
+        "year": (release.get("date") or "")[:4],
+        "type": primary,
+        "country": release.get("country") or "",
+        "quality": _release_quality(release),
+    }
 
 
 def _find_position_in_detail(detail: dict, recording_id: str) -> tuple[int, int] | None:
@@ -148,7 +168,12 @@ class MBClient:
         self.cache.set(key, {"detail": detail, "candidates": candidate_ids})
         return _build_mb_release(detail, candidate_ids)
 
-    def lookup_recording(self, artist: str, title: str) -> tuple[MBRelease, int, int] | None:
+    def lookup_recording(
+        self,
+        artist: str,
+        title: str,
+        prompter: Callable[[list[dict]], int | None] | None = None,
+    ) -> tuple[MBRelease, int, int] | None:
         rec_key = f"rec::{cache_key(artist, title)}"
         cached = self.cache.get(rec_key)
         if cached is not None and "recording_id" in cached and "release_id" in cached:
@@ -162,15 +187,27 @@ class MBClient:
             recordings = results.get("recording-list", [])
             if not recordings:
                 return None
-            pick = None
+            candidates: list[dict] = []
             for rec in recordings:
-                rid = _pick_release_id_from_recording(rec)
-                if rid is not None:
-                    pick = (rid, rec.get("id"))
-                    break
-            if pick is None:
+                best = _best_release_for_recording(rec)
+                if best is None:
+                    continue
+                candidates.append(_candidate_summary(rec, best))
+            if not candidates:
                 return None
-            release_id, recording_id = pick
+
+            chosen_idx = 0
+            if prompter is not None and len(candidates) > 1:
+                top = candidates[:3]
+                base_q = top[0]["quality"]
+                if any(c["quality"] - base_q <= 10 for c in top[1:]):
+                    picked = prompter(top)
+                    if picked is None:
+                        return None
+                    chosen_idx = picked
+            chosen = candidates[chosen_idx]
+            release_id = chosen["release_id"]
+            recording_id = chosen["recording_id"]
             self.cache.set(rec_key, {
                 "release_id": release_id,
                 "recording_id": recording_id,

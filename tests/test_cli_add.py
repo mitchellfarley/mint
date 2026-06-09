@@ -140,6 +140,75 @@ def test_run_add_uses_ytmusic_artist_and_track_fields(tmp_path, make_mp3):
     assert args == ("Gorillaz", "Feel Good Inc.")
 
 
+def _fake_release_alt(rid="rid-2", title="Compilation"):
+    return MBRelease(
+        release_id=rid,
+        artist_credit_phrase="Various Artists",
+        title=title,
+        year="2022",
+        tracks={
+            (1, 1): MBTrack(disc=1, position=1, title="Feel Good Inc.",
+                            total_tracks=20, total_discs=1),
+        },
+        candidate_release_ids=[rid],
+    )
+
+
+def test_run_add_prompter_picks_second_candidate(tmp_path, make_mp3):
+    library_root = tmp_path / "Library"
+    library_root.mkdir()
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    staged = make_mp3(name=str(staging / "abc123.mp3"))
+
+    chosen_release = _fake_release_alt(rid="rid-2", title="Compilation")
+    fake_candidates = [
+        {"recording_id": "r1", "release_id": "rid-1", "artist": "Gorillaz",
+         "title": "Demon Days", "year": "2005", "type": "Album", "country": "US",
+         "quality": 0},
+        {"recording_id": "r2", "release_id": "rid-2", "artist": "Various Artists",
+         "title": "Compilation", "year": "2022", "type": "Album", "country": "GB",
+         "quality": 0},
+        {"recording_id": "r3", "release_id": "rid-3", "artist": "Gorillaz",
+         "title": "Demon Days (Deluxe)", "year": "2006", "type": "Album",
+         "country": "US", "quality": 0},
+    ]
+
+    def fake_lookup(artist, title, prompter=None):
+        assert prompter is not None
+        idx = prompter(fake_candidates)
+        assert idx == 1
+        return chosen_release, 1, 1
+
+    prompter_calls: list[list[dict]] = []
+
+    def test_prompter(candidates):
+        prompter_calls.append(candidates)
+        return 1
+
+    with patch("mint.commands.add.download_url") as dl, \
+         patch("mint.commands.add.MBClient") as mbc, \
+         patch("mint.commands.add.import_file") as imp:
+        dl.return_value = [_dl(staged, title="Gorillaz - Feel Good Inc.")]
+        mbc.return_value.lookup_recording.side_effect = fake_lookup
+        mbc.return_value.fetch_cover.return_value = None
+        imp.return_value = 0
+        summary = run_add(
+            youtube_url="https://youtube.com/watch?v=abc123",
+            library_root=library_root,
+            staging_dir=staging,
+            cache_db=tmp_path / "mb.db",
+            user_agent=("mint", "test", "x@y.z"),
+            prompter=test_prompter,
+        )
+
+    assert summary.imported == 1
+    assert len(prompter_calls) == 1
+    assert prompter_calls[0][1]["release_id"] == "rid-2"
+    final = library_root / "Various Artists" / "Compilation" / "01 Feel Good Inc..mp3"
+    assert final.exists()
+
+
 def test_run_add_falls_back_to_uploader_when_title_unparseable(tmp_path, make_mp3):
     library_root = tmp_path / "Library"
     library_root.mkdir()

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from mint.auditor import propose_fixes
 from mint.cleaner import apply_proposed
@@ -29,6 +31,33 @@ class AddSummary:
     skipped: int = 0
     failed: int = 0
     failed_titles: list[str] = field(default_factory=list)
+
+
+def _interactive_prompter(label: str) -> Callable[[list[dict]], int | None]:
+    def prompt(candidates: list[dict]) -> int | None:
+        print(f'Multiple matches for "{label}":', flush=True)
+        for i, c in enumerate(candidates, start=1):
+            artist = c.get("artist") or "?"
+            title = c.get("title") or "?"
+            year = c.get("year") or "?"
+            typ = c.get("type") or "?"
+            country = c.get("country") or "?"
+            print(f"  [{i}] {artist} — {title} ({year}, {typ}, {country})", flush=True)
+        n = len(candidates)
+        for _ in range(3):
+            try:
+                raw = input(f"Pick [1-{n}, or Enter to skip]: ").strip()
+            except EOFError:
+                return None
+            if raw == "":
+                return None
+            if raw.isdigit():
+                idx = int(raw)
+                if 1 <= idx <= n:
+                    return idx - 1
+            print("Invalid input.", flush=True)
+        return None
+    return prompt
 
 
 def _parse(d: DownloadedTrack) -> tuple[str, str]:
@@ -99,6 +128,7 @@ def run_add(
     staging_dir: Path,
     cache_db: Path,
     user_agent: tuple[str, str, str],
+    prompter: Callable[[list[dict]], int | None] | None = None,
 ) -> AddSummary:
     summary = AddSummary()
     staging_dir.mkdir(parents=True, exist_ok=True)
@@ -134,9 +164,16 @@ def run_add(
             print(f"  duplicate, skipped: {artist} — {title}", flush=True)
             continue
 
+        if prompter is not None:
+            prompt_cb = prompter
+        elif sys.stdin.isatty() and sys.stdout.isatty():
+            prompt_cb = _interactive_prompter(label)
+        else:
+            prompt_cb = None
         lookup = client.lookup_recording(
             normalize_artist_for_mb(artist),
             normalize_title_for_mb(title),
+            prompter=prompt_cb,
         )
         if lookup is None:
             summary.failed += 1

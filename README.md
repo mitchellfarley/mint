@@ -68,9 +68,13 @@ Usage:
 Commands:
   add <url>   download YouTube URL, tag, import into Apple Music
   clean       audit library, propose ID3 fixes, apply on approval
+  dup         find and remove duplicate tracks, albums, artists
   update      upgrade mint to the latest version from GitHub
+  version     print the installed version
   help        show this help
 ```
+
+`mint --version` and `mint -v` are equivalent to `mint version`.
 
 ### `mint add <url>`
 
@@ -84,8 +88,8 @@ mint add "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 Pipeline per track:
 
 1. yt-dlp downloads audio as mp3 into `~/Music/staging/`
-2. The video title is parsed as `Artist - Track` (noise like
-   `(Official Video)`, `[Lyrics]`, `4K` is stripped)
+2. Artist and track are resolved from yt-dlp metadata, then the
+   video title, then the uploader name (see fallback chain below)
 3. MusicBrainz recording search resolves the canonical release,
    disc, and position
 4. ID3 tags written: title, artist, album artist, album, year,
@@ -109,11 +113,24 @@ Summary
     - RANDOM_TITLE
 ```
 
-**Title format requirement.** The parser expects `Artist - Track`
-(or `Artist | Track`, `Artist — Track`). Videos with non-standard
-titles (e.g. `ColdplayVEVO` channel uploading `Yellow` with no
-separator) are reported as `unparseable title` and left in the
-staging directory.
+**How artist and track are resolved.** Per download, mint tries
+three sources in order:
+
+1. yt-dlp's `artist` and `track` metadata fields, if both are
+   present. This covers most YouTube Music and Topic-channel
+   uploads, where the canonical artist/track are attached as
+   metadata regardless of the visible video title.
+2. Title parsing: `Artist - Track`, `Artist | Track`, or
+   `Artist — Track`, with noise like `(Official Video)`,
+   `[Lyrics]`, `4K` stripped.
+3. Uploader name as artist plus the full video title as track.
+   This is a guess and can still produce wrong MusicBrainz
+   matches (e.g. an unrelated cover, or no match at all), so
+   results from this fallback should be sanity-checked.
+
+Only if all three fail (no artist or no title resolved) is the
+download reported as `unparseable title` and left in the staging
+directory.
 
 ### `mint clean`
 
@@ -127,6 +144,32 @@ approval. Checks for:
 - Genre inconsistent across an artist's library
 - Missing cover art
 - MusicBrainz lookup failures
+
+### `mint dup`
+
+Scan the library for duplicate artists, albums, and tracks.
+
+Detection is normalized: a leading `The ` is dropped from artist
+names, and artist/album/track strings are compared via the same
+normalization used by `mint add` (case, punctuation, and
+whitespace folded). Artists are keyed off TPE2 (album artist)
+when present, else TPE1.
+
+Three reports are produced:
+
+- **Duplicate artists.** Same normalized artist appearing under
+  multiple spellings (e.g. `Beyoncé` vs `Beyonce`). Reported
+  only; manual rename/merge is required.
+- **Duplicate albums.** Same `(artist, album)` key with files
+  living under more than one directory. Reported only; manual
+  merge is required.
+- **Duplicate tracks.** Same `(artist, title)` key across
+  multiple files. The first file in each group is kept; the
+  rest are flagged for deletion. After confirmation (`y`), the
+  extra files are unlinked from disk and removed from Apple
+  Music via AppleScript.
+
+No deletions occur without an explicit `y` prompt.
 
 ## Configuration
 
