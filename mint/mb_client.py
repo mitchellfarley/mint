@@ -247,6 +247,17 @@ class MBClient:
             release_id = cached["release_id"]
             recording_id = cached["recording_id"]
             ordered_sibling_ids = cached.get("sibling_release_ids") or []
+            if not ordered_sibling_ids:
+                full_releases = self._full_releases_for_recording(recording_id)
+                sib_ids = [r["id"] for r in full_releases if r.get("id")]
+                ordered_sibling_ids = [release_id] + [
+                    rid for rid in sib_ids if rid != release_id
+                ]
+                self.cache.set(rec_key, {
+                    "release_id": release_id,
+                    "recording_id": recording_id,
+                    "sibling_release_ids": ordered_sibling_ids,
+                })
         else:
             self._throttle()
             results = musicbrainzngs.search_recordings(
