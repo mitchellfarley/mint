@@ -65,24 +65,28 @@ def _build_mb_release(detail: dict, candidates: list[str]) -> MBRelease:
 
 _BAD_SECONDARY_TYPES = {
     "mixtape/street", "compilation", "dj-mix", "demo", "bootleg",
-    "interview", "spokenword", "audiobook",
+    "interview", "spokenword", "audiobook", "soundtrack", "karaoke",
+}
+_DEMOTED_SECONDARY_TYPES = {
+    "live", "remix",
 }
 
 
 def _release_quality(release: dict) -> int:
-    """Lower is better. 0 = canonical album, higher = less canonical."""
+    """Lower is better. 0 = canonical studio album, higher = less canonical."""
     rg = release.get("release-group", {}) or {}
     primary = (rg.get("primary-type") or "").lower()
     secondaries = {s.lower() for s in (rg.get("secondary-type-list") or [])}
     if secondaries & _BAD_SECONDARY_TYPES:
         return 100
+    demoted = bool(secondaries & _DEMOTED_SECONDARY_TYPES)
     if primary == "album":
-        return 0
+        return 30 if demoted else 0
     if primary == "ep":
-        return 10
+        return 40 if demoted else 10
     if primary == "single":
-        return 20
-    return 50
+        return 50 if demoted else 20
+    return 60
 
 
 def _pick_release_id_from_recording(recording: dict) -> str | None:
@@ -170,6 +174,35 @@ class MBClient:
         self.cache.set(key, {"detail": detail, "candidates": candidate_ids})
         return _build_mb_release(detail, candidate_ids)
 
+    def _full_releases_for_recording(self, recording_id: str) -> list[dict]:
+        cache_k = f"recrel::{recording_id}"
+        cached = self.cache.get(cache_k)
+        if cached is not None:
+            return cached.get("releases", [])
+        self._throttle()
+        try:
+            result = musicbrainzngs.browse_releases(
+                recording=recording_id,
+                includes=["release-groups"],
+                limit=100,
+            )
+        except Exception:
+            return []
+        releases = result.get("release-list", [])
+        self.cache.set(cache_k, {"releases": releases})
+        return releases
+
+    def _best_release_from_full_list(self, releases: list[dict]) -> dict | None:
+        if not releases:
+            return None
+        official = [r for r in releases if r.get("status") == "Official"]
+        pool = official or releases
+        pool_sorted = sorted(pool, key=_release_sort_key)
+        chosen = pool_sorted[0]
+        if _release_quality(chosen) >= 100:
+            return None
+        return chosen
+
     def lookup_recording(
         self,
         artist: str,
@@ -184,26 +217,36 @@ class MBClient:
         else:
             self._throttle()
             results = musicbrainzngs.search_recordings(
-                artist=artist, recording=title, limit=10
+                artist=artist, recording=title, limit=25
             )
             recordings = results.get("recording-list", [])
             if not recordings:
                 return None
+
+            query_norm = normalize_for_dupe(title)
+            matched_recordings = [
+                rec for rec in recordings
+                if normalize_for_dupe(rec.get("title", "")) == query_norm
+            ]
+            recordings_to_evaluate = matched_recordings or recordings
+
             candidates: list[dict] = []
-            for rec in recordings:
-                best = _best_release_for_recording(rec)
+            for rec in recordings_to_evaluate:
+                rec_id = rec.get("id")
+                if not rec_id:
+                    continue
+                full_releases = self._full_releases_for_recording(rec_id)
+                if full_releases:
+                    best = self._best_release_from_full_list(full_releases)
+                else:
+                    best = _best_release_for_recording(rec)
                 if best is None:
                     continue
                 candidates.append(_candidate_summary(rec, best))
+
             if not candidates:
                 return None
 
-            query_norm = normalize_for_dupe(title)
-            title_matches = [
-                c for c in candidates
-                if normalize_for_dupe(c.get("recording_title", "")) == query_norm
-            ]
-            candidates = title_matches if title_matches else candidates
             candidates.sort(
                 key=lambda c: (c.get("quality", 0), c.get("year") or "9999")
             )

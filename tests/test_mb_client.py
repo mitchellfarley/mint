@@ -146,10 +146,20 @@ def _fake_recording_search():
     }
 
 
+def _fake_browse_releases_for(rec_id_to_releases):
+    def _impl(recording=None, includes=None, limit=None):
+        return {"release-list": rec_id_to_releases.get(recording, [])}
+    return _impl
+
+
 def test_lookup_recording_returns_release_and_position(tmp_path):
     cache = MBCache(tmp_path / "mb.db")
+    rec_releases = _fake_recording_search()["recording-list"][0]["release-list"]
     with patch("mint.mb_client.musicbrainzngs") as mb:
         mb.search_recordings.return_value = _fake_recording_search()
+        mb.browse_releases.side_effect = _fake_browse_releases_for(
+            {"rec2": rec_releases}
+        )
         mb.get_release_by_id.return_value = _fake_release_detail()
         client = MBClient(cache=cache)
         got = client.lookup_recording("Gorillaz", "Feel Good Inc.")
@@ -170,8 +180,12 @@ def test_lookup_recording_no_match_returns_none(tmp_path):
 
 def test_lookup_recording_uses_cache_on_second_call(tmp_path):
     cache = MBCache(tmp_path / "mb.db")
+    rec_releases = _fake_recording_search()["recording-list"][0]["release-list"]
     with patch("mint.mb_client.musicbrainzngs") as mb:
         mb.search_recordings.return_value = _fake_recording_search()
+        mb.browse_releases.side_effect = _fake_browse_releases_for(
+            {"rec2": rec_releases}
+        )
         mb.get_release_by_id.return_value = _fake_release_detail()
         client = MBClient(cache=cache)
         client.lookup_recording("Gorillaz", "Feel Good Inc.")
@@ -309,8 +323,14 @@ def test_lookup_recording_calls_prompter_when_ambiguous(tmp_path):
         seen.append(cands)
         return 1
 
+    ambig = _fake_recording_search_ambiguous()
+    rec_releases_map = {
+        r["id"]: r["release-list"]
+        for r in ambig["recording-list"]
+    }
     with patch("mint.mb_client.musicbrainzngs") as mb:
-        mb.search_recordings.return_value = _fake_recording_search_ambiguous()
+        mb.search_recordings.return_value = ambig
+        mb.browse_releases.side_effect = _fake_browse_releases_for(rec_releases_map)
         mb.get_release_by_id.return_value = detail
         client = MBClient(cache=cache)
         got = client.lookup_recording("Drake", "Rich Flex", prompter=prompter)
@@ -324,8 +344,14 @@ def test_lookup_recording_calls_prompter_when_ambiguous(tmp_path):
 
 def test_lookup_recording_prompter_skip_returns_none(tmp_path):
     cache = MBCache(tmp_path / "mb.db")
+    ambig = _fake_recording_search_ambiguous()
+    rec_releases_map = {
+        r["id"]: r["release-list"]
+        for r in ambig["recording-list"]
+    }
     with patch("mint.mb_client.musicbrainzngs") as mb:
-        mb.search_recordings.return_value = _fake_recording_search_ambiguous()
+        mb.search_recordings.return_value = ambig
+        mb.browse_releases.side_effect = _fake_browse_releases_for(rec_releases_map)
         client = MBClient(cache=cache)
         got = client.lookup_recording(
             "Drake", "Rich Flex", prompter=lambda c: None,
@@ -336,8 +362,12 @@ def test_lookup_recording_prompter_skip_returns_none(tmp_path):
 def test_lookup_recording_no_prompt_when_single_candidate(tmp_path):
     cache = MBCache(tmp_path / "mb.db")
     calls: list[list[dict]] = []
+    rec_releases = _fake_recording_search()["recording-list"][0]["release-list"]
     with patch("mint.mb_client.musicbrainzngs") as mb:
         mb.search_recordings.return_value = _fake_recording_search()
+        mb.browse_releases.side_effect = _fake_browse_releases_for(
+            {"rec2": rec_releases}
+        )
         mb.get_release_by_id.return_value = _fake_release_detail()
         client = MBClient(cache=cache)
         client.lookup_recording(
