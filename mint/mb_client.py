@@ -242,9 +242,11 @@ class MBClient:
     ) -> tuple[MBRelease, int, int] | None:
         rec_key = f"rec::{cache_key(artist, title)}"
         cached = self.cache.get(rec_key)
+        ordered_sibling_ids: list[str] = []
         if cached is not None and "recording_id" in cached and "release_id" in cached:
             release_id = cached["release_id"]
             recording_id = cached["recording_id"]
+            ordered_sibling_ids = cached.get("sibling_release_ids") or []
         else:
             self._throttle()
             results = musicbrainzngs.search_recordings(
@@ -276,6 +278,7 @@ class MBClient:
             recordings_to_evaluate = matched_recordings or recordings
 
             candidates: list[dict] = []
+            recording_sibling_releases: dict[str, list[str]] = {}
             for rec in recordings_to_evaluate:
                 rec_id = rec.get("id")
                 if not rec_id:
@@ -283,8 +286,14 @@ class MBClient:
                 full_releases = self._full_releases_for_recording(rec_id)
                 if full_releases:
                     best = self._best_release_from_full_list(full_releases)
+                    recording_sibling_releases[rec_id] = [
+                        r["id"] for r in full_releases if r.get("id")
+                    ]
                 else:
                     best = _best_release_for_recording(rec)
+                    recording_sibling_releases[rec_id] = [
+                        r["id"] for r in (rec.get("release-list") or []) if r.get("id")
+                    ]
                 if best is None:
                     continue
                 candidates.append(_candidate_summary(rec, best))
@@ -308,9 +317,14 @@ class MBClient:
             chosen = candidates[chosen_idx]
             release_id = chosen["release_id"]
             recording_id = chosen["recording_id"]
+            sibling_ids = recording_sibling_releases.get(recording_id, [])
+            ordered_sibling_ids = [release_id] + [
+                rid for rid in sibling_ids if rid != release_id
+            ]
             self.cache.set(rec_key, {
                 "release_id": release_id,
                 "recording_id": recording_id,
+                "sibling_release_ids": ordered_sibling_ids,
             })
 
         release_key = f"rid::{release_id}"
@@ -329,7 +343,8 @@ class MBClient:
         if pos is None:
             return None
         disc, position = pos
-        mb_release = _build_mb_release(detail, [release_id])
+        cover_candidates = ordered_sibling_ids or [release_id]
+        mb_release = _build_mb_release(detail, cover_candidates)
         return mb_release, disc, position
 
     def fetch_cover(self, release_ids: Iterable[str]) -> bytes | None:
