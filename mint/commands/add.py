@@ -65,7 +65,14 @@ def _parse(d: DownloadedTrack) -> tuple[str, str]:
         return d.artist, d.track
     parsed = parse_title(d.title)
     if parsed is not None:
-        return parsed.artist, parsed.track
+        artist, track = parsed.artist, parsed.track
+        if d.uploader:
+            u = normalize_for_dupe(d.uploader)
+            a_norm = normalize_for_dupe(artist)
+            t_norm = normalize_for_dupe(track)
+            if u and u in t_norm and u not in a_norm:
+                artist, track = track, artist
+        return artist, track
     if d.uploader:
         return d.uploader, d.title
     return "", ""
