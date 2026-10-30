@@ -36,6 +36,12 @@ jobs:
       - name: Install build deps
         run: python -m pip install --upgrade pip build
 
+      # Never cut a release from a commit whose tests fail.
+      - name: Run tests
+        run: |
+          python -m pip install -e '.[dev]'
+          python -m pytest -q
+
       - name: Bump patch version in pyproject.toml
         id: bump
         run: |
