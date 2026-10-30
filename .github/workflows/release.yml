@@ -3,6 +3,12 @@ name: Auto Release
 on:
   push:
     branches: [main]
+    # Changes that can't affect the installed package don't need a release.
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - 'tests/**'
+      - '.github/**'
 
 permissions:
   contents: write
